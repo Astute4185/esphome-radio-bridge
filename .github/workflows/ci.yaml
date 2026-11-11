@@ -1,0 +1,52 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install development checks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format g++
+          python -m pip install -e '.[dev]'
+      - name: Lint
+        run: ./scripts/lint.sh
+      - name: Test
+        run: ./scripts/test.sh
+  validate-esphome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install pinned ESPHome
+        run: python -m pip install esphome==2026.10.1
+      - name: Validate configurations
+        run: ./scripts/validate.sh
+  build-esp32:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/platformio
+          key: platformio-${{ runner.os }}-serial-gateway-2026.10.1
+      - name: Install pinned ESPHome
+        run: python -m pip install esphome==2026.10.1
+      - name: Compile ESP32 firmware
+        run: COMPILE=1 ./scripts/validate.sh

@@ -1,0 +1,39 @@
+# Test example. MGM210 selects 4-wire normal and 2-wire bootloader UART.
+esphome:
+  name: tubeszb-mgm210-poe-2023
+  min_version: 2026.10.1
+
+packages:
+  board_network: !include ../packages/esp32-wrover-lan8720.yaml
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [serial_radio_gateway]
+
+logger:
+  baud_rate: 0
+
+api:
+  encryption:
+    key: !secret apikey_tubeszb
+
+ota:
+  - platform: esphome
+
+serial_radio_gateway:
+  driver: tubeszb_mgm210_poe_2023
+  tcp_port: 6638
+  flash_armed:
+    name: EFR32 Firmware Flash Armed
+  radio_reset:
+    name: EFR32 Reset
+  enter_bootloader:
+    name: EFR32 Enter Bootloader
+  exit_bootloader:
+    name: EFR32 Exit Bootloader
+  connected:
+    name: Zigbee TCP Client Connected
+  mode:
+    name: EFR32 Operating Mode

@@ -1,0 +1,34 @@
+# ESPHome component compile fixture (no secrets; safe for CI).
+esphome:
+  name: test-serial-radio-gateway
+  min_version: 2026.10.1
+
+packages:
+  hardware: !include ../../../packages/esp32-wrover-lan8720.yaml
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [serial_radio_gateway]
+
+logger:
+  baud_rate: 0
+
+serial_radio_gateway:
+  driver: tubeszb_mgm210_poe_2023
+  tcp_port: 6638
+  connected:
+    name: TCP Connected
+  disconnects:
+    name: TCP Disconnects
+  mode:
+    name: Radio Mode
+  flash_armed:
+    name: Firmware Maintenance Armed
+  radio_reset:
+    name: Radio Reset
+  enter_bootloader:
+    name: Enter Bootloader
+  exit_bootloader:
+    name: Exit Bootloader
