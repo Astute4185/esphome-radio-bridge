@@ -27,6 +27,30 @@ int main() {
   assert(!resolve_manifest_url(catalogue, "firmware\\manifest.json", result));
   assert(!resolve_manifest_url(catalogue, "firmware/manifest.json?token=1", result));
 
+  // The catalogue may be hosted inside firmware/, while the entry is rooted at
+  // the repository's firmware/ directory. Avoid duplicating that segment.
+  const std::string nested = "https://raw.githubusercontent.com/owner/repo/main/firmware/catalogue.json";
+  assert(resolve_manifest_url(nested, "firmware/tubeszb/zha/manifest.json", result));
+  assert(result == "https://raw.githubusercontent.com/owner/repo/main/firmware/tubeszb/zha/manifest.json");
+
+  // Ordinary directory-relative entries must remain supported.
+  assert(resolve_manifest_url(nested, "tubeszb/zha/manifest.json", result));
+  assert(result == "https://raw.githubusercontent.com/owner/repo/main/firmware/tubeszb/zha/manifest.json");
+
+  // Explicit ./ overrides overlap handling when a repeated directory is intentional.
+  assert(resolve_manifest_url(nested, "./firmware/manifest.json", result));
+  assert(result == "https://raw.githubusercontent.com/owner/repo/main/firmware/firmware/manifest.json");
+
+  // No repository name, branch, tag or hosting-directory structure is hardcoded.
+  const std::string tagged = "https://cdn.example.org/releases/v3.2/firmware/catalogue.json";
+  assert(resolve_manifest_url(tagged, "firmware/board/radio/manifest.json", result));
+  assert(result == "https://cdn.example.org/releases/v3.2/firmware/board/radio/manifest.json");
+
+  // Reject attempts to escape the catalogue origin or hide traversal with encoding.
+  assert(!resolve_manifest_url(nested, "./../manifest.json", result));
+  assert(!resolve_manifest_url(nested, "firmware/%2e%2e/manifest.json", result));
+  assert(!resolve_manifest_url(nested, "https://evil.example/manifest.json", result));
+
   assert(valid_firmware_version("0.1"));
   assert(valid_firmware_version("3.2.10"));
   assert(!valid_firmware_version(""));

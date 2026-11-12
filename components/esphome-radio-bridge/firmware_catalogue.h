@@ -26,20 +26,41 @@ inline bool is_https_url(const std::string& url) {
   return url.find('#') == std::string::npos;
 }
 
-// Catalogue entries are paths relative to catalogue.json. No host/scheme changes are allowed.
+// Resolve catalogue entries without assuming where the catalogue lives in the repository.
+// An unprefixed entry may include directory segments already present in the catalogue URL
+// (e.g. "firmware/..."); the longest complete segment overlap is used once. A leading
+// "./" explicitly means catalogue-directory-relative, even if directories repeat.
+// Entries cannot change the HTTPS origin or traverse into parent directories.
 inline bool resolve_manifest_url(const std::string& catalogue_url, const std::string& path,
                                  std::string& resolved) {
   if (!is_https_url(catalogue_url) || path.empty() || path.front() == '/' || path.size() > 512 ||
       path.find("..") != std::string::npos || path.find(":") != std::string::npos ||
       path.find('?') != std::string::npos || path.find('#') != std::string::npos ||
-      path.find('\\') != std::string::npos)
+      path.find('\\') != std::string::npos || path.find('%') != std::string::npos)
     return false;
   for (char c : path) {
     if (static_cast<unsigned char>(c) <= 32 || static_cast<unsigned char>(c) >= 127) return false;
   }
   const auto slash = catalogue_url.rfind('/');
   if (slash == std::string::npos || slash < sizeof("https://") - 1) return false;
-  resolved = catalogue_url.substr(0, slash + 1) + path;
+  const std::string directory = catalogue_url.substr(0, slash + 1);
+
+  if (path.compare(0, 2, "./") == 0) {
+    if (path.size() == 2) return false;
+    resolved = directory + path.substr(2);
+  } else {
+    size_t overlap = 0;
+    // Match only whole path segments. This works for raw GitHub URLs, GitHub
+    // branch/tag paths and other HTTPS hosting without knowing their structure.
+    auto separator = directory.find('/', sizeof("https://") - 1);
+    while (separator != std::string::npos) {
+      const std::string suffix = directory.substr(separator + 1);
+      if (!suffix.empty() && suffix.size() > overlap && path.compare(0, suffix.size(), suffix) == 0)
+        overlap = suffix.size();
+      separator = directory.find('/', separator + 1);
+    }
+    resolved = directory + path.substr(overlap);
+  }
   return is_https_url(resolved);
 }
 
