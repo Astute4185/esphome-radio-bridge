@@ -42,7 +42,18 @@ web_server:
     username: !secret web_server_username
     password: !secret web_server_password
 
+http_request:
+  verify_ssl: true
+  follow_redirects: false
+
 esphome-radio-bridge:
+  catalogue_url: https://raw.githubusercontent.com/Astute4185/esphome-radio-firmware/main/catalogue.json
+  manifest_override:
+    name: Firmware Manifest Override URL
+  catalogue_status:
+    name: Firmware Catalogue Status
+  refresh_catalogue:
+    name: Refresh Firmware Catalogue
   id: zigbee_gateway
   driver: tubeszb_mgm210_poe_2023
   tcp_port: 6638

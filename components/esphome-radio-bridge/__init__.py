@@ -1,12 +1,12 @@
-"""ESPHome radio TCP bridge with a pluggable board driver.
+"""ESPHome radio TCP bridge with pluggable board and firmware drivers.
 
-Every supported board must have normal-mode RTS/CTS wired. The board driver
-owns GPIO mapping, reset, bootloader entry, baud rates and bootloader UART mode.
+Board drivers own GPIO mapping, UART flow control, radio identification and
+bootloader handling. Firmware catalogue support is optional and radio agnostic.
 """
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import binary_sensor, button, sensor, switch, text_sensor
+from esphome.components import binary_sensor, button, http_request, sensor, switch, text, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CONNECTIVITY,
@@ -16,7 +16,16 @@ from esphome.const import (
 
 DOMAIN = "esphome-radio-bridge"
 DEPENDENCIES = ["esp32", "network"]
-AUTO_LOAD = ["binary_sensor", "button", "sensor", "switch", "text_sensor"]
+AUTO_LOAD = [
+    "binary_sensor",
+    "button",
+    "http_request",
+    "json",
+    "sensor",
+    "switch",
+    "text",
+    "text_sensor",
+]
 
 # Add a new board ID here and its corresponding C++ BoardModel/factory implementation.
 BOARD_DRIVERS = ("tubeszb_mgm210_poe_2023",)
@@ -38,12 +47,27 @@ CONF_EXIT_BOOTLOADER = "exit_bootloader"
 CONF_INSTALLED_FIRMWARE = "installed_firmware"
 CONF_RADIO_IDENTIFICATION_STATUS = "radio_identification_status"
 CONF_PROBE_RADIO = "probe_radio"
+CONF_CATALOGUE_URL = "catalogue_url"
+CONF_HTTP_REQUEST_ID = "http_request_id"
+CONF_MANIFEST_OVERRIDE = "manifest_override"
+CONF_CATALOGUE_STATUS = "catalogue_status"
+CONF_REFRESH_CATALOGUE = "refresh_catalogue"
+
+
+def secure_url(value):
+    value = cv.url(value)
+    if not value.startswith("https://"):
+        raise cv.Invalid("Firmware catalogue must use HTTPS")
+    return value
+
 
 ns = cg.esphome_ns.namespace("esphome_radio_bridge")
 RadioBridge = ns.class_("RadioBridge", cg.Component)
 BoardModel = ns.namespace("drivers").enum("BoardModel", is_class=True)
 RadioResetButton = ns.class_("RadioResetButton", button.Button)
 ProbeRadioButton = ns.class_("ProbeRadioButton", button.Button)
+RefreshCatalogueButton = ns.class_("RefreshCatalogueButton", button.Button)
+ManifestOverrideText = ns.class_("ManifestOverrideText", text.Text)
 EnterBootloaderButton = ns.class_("EnterBootloaderButton", button.Button)
 ExitBootloaderButton = ns.class_("ExitBootloaderButton", button.Button)
 FlashArmedSwitch = ns.class_("FlashArmedSwitch", switch.Switch)
@@ -53,6 +77,17 @@ CONFIG_SCHEMA = cv.All(
         {
             cv.GenerateID(): cv.declare_id(RadioBridge),
             cv.Required(CONF_DRIVER): cv.one_of(*BOARD_DRIVERS, lower=True),
+            cv.GenerateID(CONF_HTTP_REQUEST_ID): cv.use_id(http_request.HttpRequestComponent),
+            cv.Optional(CONF_CATALOGUE_URL): secure_url,
+            cv.Optional(CONF_MANIFEST_OVERRIDE): text.text_schema(
+                ManifestOverrideText, mode="text", entity_category=ENTITY_CATEGORY_CONFIG
+            ),
+            cv.Optional(CONF_CATALOGUE_STATUS): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_REFRESH_CATALOGUE): button.button_schema(
+                RefreshCatalogueButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
             cv.Optional(CONF_TCP_PORT, default=6638): cv.port,
             cv.Optional(CONF_MAINTENANCE_TIMEOUT, default="10min"): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_BRIDGE_READY): binary_sensor.binary_sensor_schema(
@@ -114,9 +149,22 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     cg.add(var.set_board_model(getattr(BoardModel, config[CONF_DRIVER].upper())))
+    request = await cg.get_variable(config[CONF_HTTP_REQUEST_ID])
+    cg.add(var.set_http_request(request))
+    if catalogue_url := config.get(CONF_CATALOGUE_URL):
+        cg.add(var.set_catalogue_url(catalogue_url))
     cg.add(var.set_tcp_port(config[CONF_TCP_PORT]))
     cg.add(var.set_maintenance_timeout(config[CONF_MAINTENANCE_TIMEOUT].total_milliseconds))
 
+    if conf := config.get(CONF_MANIFEST_OVERRIDE):
+        override = cg.new_Pvariable(conf[CONF_ID], var)
+        await text.register_text(override, conf, min_length=0, max_length=255)
+        cg.add(var.set_manifest_override_text(override))
+    if conf := config.get(CONF_CATALOGUE_STATUS):
+        status = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_catalogue_status_sensor(status))
+    if conf := config.get(CONF_REFRESH_CATALOGUE):
+        await button.new_button(conf, var)
     if conf := config.get(CONF_BRIDGE_READY):
         entity = await binary_sensor.new_binary_sensor(conf)
         cg.add(var.set_bridge_ready_sensor(entity))

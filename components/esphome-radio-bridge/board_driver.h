@@ -24,6 +24,7 @@ struct BoardProfile {
   uint32_t bootloader_baud;
   bool supports_bootloader;
   FirmwareProtocol firmware_protocol;
+  const char* radio_type{"unknown"};  // Firmware channel key, e.g. zha or matter
 };
 
 constexpr bool valid_profile(const BoardProfile& p) {
