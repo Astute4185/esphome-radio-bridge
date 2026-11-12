@@ -1,9 +1,9 @@
 #pragma once
 
+#include <memory>
+
 #include "board_driver.h"
 #include "tubeszb_mgm210_poe_2023.h"
-
-#include <memory>
 
 namespace esphome::serial_radio_gateway::drivers {
 enum class BoardModel : uint8_t { TUBESZB_MGM210_POE_2023 };

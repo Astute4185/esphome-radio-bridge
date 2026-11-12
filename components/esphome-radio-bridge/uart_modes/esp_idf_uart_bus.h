@@ -1,16 +1,16 @@
 #pragma once
-#include "mode_factory.h"
-#include "driver/uart.h"
-#include "esp_err.h"
 #include <cstddef>
 #include <cstdint>
+
+#include "driver/uart.h"
+#include "esp_err.h"
+#include "mode_factory.h"
 namespace esphome::serial_radio_gateway::uart_modes {
 // Owns the ESP-IDF UART. The gateway does not call uart_* functions directly.
 class EspIdfUartBus final : private UartHardware {
  public:
-  bool start(const UartPinout &pins, uint32_t baud, UartModeId normal, UartModeId bootloader) {
-    if (ready_ || baud == 0 || !valid_uart_pinout(pins, normal, bootloader))
-      return false;
+  bool start(const UartPinout& pins, uint32_t baud, UartModeId normal, UartModeId bootloader) {
+    if (ready_ || baud == 0 || !valid_uart_pinout(pins, normal, bootloader)) return false;
     pins_ = pins;
     port_ = static_cast<uart_port_t>(pins.port);
     uart_config_t cfg{};
@@ -37,9 +37,11 @@ class EspIdfUartBus final : private UartHardware {
     flush_input();
     return true;
   }
-  int read(uint8_t *data, size_t size) { return ready_ ? uart_read_bytes(port_, data, size, 0) : -1; }
-  int write(const uint8_t *data, size_t size) { return ready_ ? uart_write_bytes(port_, data, size) : -1; }
-  void flush_input() { if (ready_) uart_flush_input(port_); }
+  int read(uint8_t* data, size_t size) { return ready_ ? uart_read_bytes(port_, data, size, 0) : -1; }
+  int write(const uint8_t* data, size_t size) { return ready_ ? uart_write_bytes(port_, data, size) : -1; }
+  void flush_input() {
+    if (ready_) uart_flush_input(port_);
+  }
   bool ready() const { return ready_; }
   void stop() {
     if (!ready_) return;
@@ -47,6 +49,7 @@ class EspIdfUartBus final : private UartHardware {
     uart_driver_delete(port_);
     ready_ = false;
   }
+
  private:
   bool set_pins(int tx, int rx, int rts, int cts) override {
     return uart_set_pin(port_, tx, rx, rts, cts) == ESP_OK;

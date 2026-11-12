@@ -6,7 +6,7 @@ constexpr bool valid_uart_mode(UartModeId mode) {
   return mode == UartModeId::TWO_WIRE || mode == UartModeId::FOUR_WIRE;
 }
 constexpr bool requires_rts_cts(UartModeId mode) { return mode == UartModeId::FOUR_WIRE; }
-constexpr const char *mode_name(UartModeId mode) {
+constexpr const char* mode_name(UartModeId mode) {
   return requires_rts_cts(mode) ? "4-wire (RTS/CTS)" : "2-wire (TX/RX)";
 }
 struct UartPinout {
@@ -27,18 +27,16 @@ class UartModeStrategy {
  public:
   virtual ~UartModeStrategy() = default;
   virtual UartModeId id() const = 0;
-  virtual bool apply(UartHardware &hardware, const UartPinout &pins) const = 0;
+  virtual bool apply(UartHardware& hardware, const UartPinout& pins) const = 0;
 };
-constexpr bool valid_uart_pinout(const UartPinout &p, UartModeId normal, UartModeId boot) {
-  if (!valid_uart_mode(normal) || !valid_uart_mode(boot) || p.port > 2 ||
-      p.tx < 0 || p.tx > 33 || p.rx < 0 || p.rx > 39 || p.tx == p.rx)
+constexpr bool valid_uart_pinout(const UartPinout& p, UartModeId normal, UartModeId boot) {
+  if (!valid_uart_mode(normal) || !valid_uart_mode(boot) || p.port > 2 || p.tx < 0 || p.tx > 33 || p.rx < 0 ||
+      p.rx > 39 || p.tx == p.rx)
     return false;
   if (!requires_rts_cts(normal) && !requires_rts_cts(boot))
     return p.rts == -1 && p.cts == -1 && p.rts_threshold == 0;
-  if (p.rts < 0 || p.rts > 33 || p.cts < 0 || p.cts > 39 ||
-      p.rts_threshold == 0 || p.rts_threshold > 127)
+  if (p.rts < 0 || p.rts > 33 || p.cts < 0 || p.cts > 39 || p.rts_threshold == 0 || p.rts_threshold > 127)
     return false;
-  return p.tx != p.rts && p.tx != p.cts && p.rx != p.rts &&
-         p.rx != p.cts && p.rts != p.cts;
+  return p.tx != p.rts && p.tx != p.cts && p.rx != p.rts && p.rx != p.cts && p.rts != p.cts;
 }
 }  // namespace esphome::serial_radio_gateway::uart_modes

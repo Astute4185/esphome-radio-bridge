@@ -5,7 +5,8 @@
 
 namespace esphome::serial_radio_gateway {
 // A bounded, allocation-free SPSC buffer; calls are made from the ESPHome loop.
-template <size_t N> class ByteRing {
+template <size_t N>
+class ByteRing {
  public:
   static_assert(N > 0);
   size_t size() const { return size_; }
@@ -14,14 +15,12 @@ template <size_t N> class ByteRing {
   void clear() { head_ = tail_ = size_ = 0; }
 
   // Returns bytes stored; callers must provide transport backpressure for the rest.
-  size_t push(const uint8_t *input, size_t count) {
+  size_t push(const uint8_t* input, size_t count) {
     size_t done = 0;
     while (done < count && size_ < N) {
       size_t chunk = count - done;
-      if (chunk > N - tail_)
-        chunk = N - tail_;
-      if (chunk > N - size_)
-        chunk = N - size_;
+      if (chunk > N - tail_) chunk = N - tail_;
+      if (chunk > N - size_) chunk = N - size_;
       std::memcpy(data_ + tail_, input + done, chunk);
       tail_ = (tail_ + chunk) % N;
       size_ += chunk;
@@ -31,11 +30,10 @@ template <size_t N> class ByteRing {
   }
 
   // Contiguous pending region, valid until the next mutating call.
-  const uint8_t *head_data() const { return data_ + head_; }
+  const uint8_t* head_data() const { return data_ + head_; }
   size_t head_size() const { return size_ < N - head_ ? size_ : N - head_; }
   void consume(size_t count) {
-    if (count > size_)
-      count = size_;
+    if (count > size_) count = size_;
     head_ = (head_ + count) % N;
     size_ -= count;
   }

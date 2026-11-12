@@ -92,7 +92,6 @@ def wait_for_prompt(connection: socket.socket, timeout: float = 15.0) -> None:
     raise FlashError("No Gecko 'BL >' prompt (check PA0, reset, UART wiring and mode)")
 
 
-
 def wait_for_complete(connection: socket.socket, timeout: float = 60.0) -> None:
     """Do not treat an XMODEM EOT ACK alone as a successful GBL install."""
     deadline = time.monotonic() + timeout
@@ -114,6 +113,7 @@ def wait_for_complete(connection: socket.socket, timeout: float = 60.0) -> None:
             raise FlashError("Gecko returned to menu without confirming upload success")
     raise FlashError("Gecko did not confirm completion of the GBL image")
 
+
 def transfer_xmodem(connection: socket.socket, firmware: bytes) -> None:
     if not firmware:
         raise FlashError("Refusing to flash an empty image")
@@ -125,7 +125,7 @@ def transfer_xmodem(connection: socket.socket, firmware: bytes) -> None:
     for offset in range(total):
         block = firmware[offset * BLOCK_BYTES : (offset + 1) * BLOCK_BYTES]
         frame = encode_packet(offset + 1, block)
-        for attempt in range(10):
+        for _attempt in range(10):
             connection.sendall(frame)
             try:
                 response = read_response(connection, {ACK, NAK}, timeout=3.0)
@@ -174,8 +174,10 @@ def validate_manifest(raw: bytes) -> dict:
             raise ValueError("fw_url must be HTTPS")
         if not isinstance(size, int) or not 0 < size <= MAX_IMAGE_BYTES:
             raise ValueError("size out of range")
-        if not isinstance(expected, str) or len(expected) != 32 or any(
-            char not in "0123456789abcdef" for char in expected
+        if (
+            not isinstance(expected, str)
+            or len(expected) != 32
+            or any(char not in "0123456789abcdef" for char in expected)
         ):
             raise ValueError("invalid MD5")
         if document.get("baudrate", 115200) != 115200:
@@ -201,8 +203,7 @@ def get_firmware(*, filename: Path | None, manifest_url: str | None) -> bytes:
     if not 0 < len(firmware) <= MAX_IMAGE_BYTES:
         raise FlashError("GBL firmware size outside allowed range")
     print(
-        f"GBL preflight complete: {len(firmware)} bytes, "
-        f"SHA256={hashlib.sha256(firmware).hexdigest()}"
+        f"GBL preflight complete: {len(firmware)} bytes, SHA256={hashlib.sha256(firmware).hexdigest()}"
     )
     return firmware
 
@@ -240,7 +241,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", required=True, help="ESP32 gateway hostname or IP")
     parser.add_argument("--port", type=int, default=6638)
     parser.add_argument(
-        "--confirm-hw-flow", action="store_true",
+        "--confirm-hw-flow",
+        action="store_true",
         help="Confirm the GBL was built for RTS/CTS NCP operation",
     )
     parser.add_argument(

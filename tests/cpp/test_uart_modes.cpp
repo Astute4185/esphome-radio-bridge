@@ -1,14 +1,15 @@
-#include "uart_modes/mode_factory.h"
-#include "drivers/tubeszb_mgm210_poe_2023_profile.h"
 #include <cassert>
 #include <string>
 #include <vector>
+
+#include "drivers/tubeszb_mgm210_poe_2023_profile.h"
+#include "uart_modes/mode_factory.h"
 using namespace esphome::serial_radio_gateway::uart_modes;
 class FakeUart : public UartHardware {
  public:
   bool set_pins(int tx, int rx, int rts, int cts) override {
-    calls.push_back("pins:" + std::to_string(tx) + "," + std::to_string(rx) + "," +
-                    std::to_string(rts) + "," + std::to_string(cts));
+    calls.push_back("pins:" + std::to_string(tx) + "," + std::to_string(rx) + "," + std::to_string(rts) +
+                    "," + std::to_string(cts));
     return !fail_pins;
   }
   bool set_flow_control(bool enable, uint8_t threshold) override {
@@ -34,10 +35,9 @@ int main() {
   // Important regression: same baud, but full flow-control strategy re-applied.
   static_assert(mgm.normal_baud == mgm.bootloader_baud);
   assert(mode_strategy(mgm.normal_uart_mode).apply(hw, mgm.uart));
-  assert((hw.calls == std::vector<std::string>{
-      "flow:off:0", "pins:4,36,2,13", "flow:on:122",
-      "flow:off:0", "pins:4,36,-1,-1",
-      "flow:off:0", "pins:4,36,2,13", "flow:on:122"}));
+  assert((hw.calls == std::vector<std::string>{"flow:off:0", "pins:4,36,2,13", "flow:on:122", "flow:off:0",
+                                               "pins:4,36,-1,-1", "flow:off:0", "pins:4,36,2,13",
+                                               "flow:on:122"}));
   hw.calls.clear();
   hw.fail_pins = true;
   assert(!mode_strategy(UartModeId::FOUR_WIRE).apply(hw, mgm.uart));

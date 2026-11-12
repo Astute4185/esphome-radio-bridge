@@ -1,7 +1,8 @@
 #pragma once
 
-#include "../uart_modes/uart_mode.h"
 #include <cstdint>
+
+#include "../uart_modes/uart_mode.h"
 
 namespace esphome::serial_radio_gateway::drivers {
 
@@ -10,12 +11,12 @@ enum class FirmwareProtocol : uint8_t { NONE, GECKO_XMODEM_CRC };
 
 // Immutable physical and operational contract. UART modes are selected by each driver.
 struct BoardProfile {
-  const char *id;
+  const char* id;
   uart_modes::UartPinout uart;
   uart_modes::UartModeId normal_uart_mode;
   uart_modes::UartModeId bootloader_uart_mode;
-  int reset_gpio;       // -1 when no software-controlled reset is available
-  int boot_gpio;        // -1 when GPIO bootloader entry is unavailable
+  int reset_gpio;  // -1 when no software-controlled reset is available
+  int boot_gpio;   // -1 when GPIO bootloader entry is unavailable
   bool reset_active_low;
   bool boot_active_low;
   uint32_t normal_baud;
@@ -24,15 +25,15 @@ struct BoardProfile {
   FirmwareProtocol firmware_protocol;
 };
 
-constexpr bool valid_profile(const BoardProfile &p) {
+constexpr bool valid_profile(const BoardProfile& p) {
   if (p.normal_baud == 0 || p.bootloader_baud == 0 ||
       !uart_modes::valid_uart_pinout(p.uart, p.normal_uart_mode, p.bootloader_uart_mode))
     return false;
   const int controls[] = {p.reset_gpio, p.boot_gpio};
   for (int i = 0; i < 2; ++i) {
     if (controls[i] == -1) continue;
-    if (controls[i] < 0 || controls[i] > 33 || controls[i] == p.uart.tx ||
-        controls[i] == p.uart.rx || controls[i] == p.uart.rts || controls[i] == p.uart.cts)
+    if (controls[i] < 0 || controls[i] > 33 || controls[i] == p.uart.tx || controls[i] == p.uart.rx ||
+        controls[i] == p.uart.rts || controls[i] == p.uart.cts)
       return false;
   }
   return p.reset_gpio < 0 || p.reset_gpio != p.boot_gpio;
@@ -43,7 +44,7 @@ constexpr bool valid_profile(const BoardProfile &p) {
 class BoardDriver {
  public:
   virtual ~BoardDriver() = default;
-  virtual const BoardProfile &profile() const = 0;
+  virtual const BoardProfile& profile() const = 0;
   virtual bool setup() = 0;
   virtual bool reset_radio() = 0;
   virtual bool enter_bootloader() = 0;

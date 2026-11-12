@@ -5,8 +5,8 @@ owns GPIO mapping, reset, bootloader entry, baud rates and bootloader UART mode.
 """
 
 import esphome.codegen as cg
-from esphome.components import binary_sensor, button, sensor, switch, text_sensor
 import esphome.config_validation as cv
+from esphome.components import binary_sensor, button, sensor, switch, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CONNECTIVITY,
@@ -46,8 +46,7 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(): cv.declare_id(SerialRadioGateway),
             cv.Required(CONF_DRIVER): cv.one_of(*BOARD_DRIVERS, lower=True),
             cv.Optional(CONF_TCP_PORT, default=6638): cv.port,
-            cv.Optional(CONF_MAINTENANCE_TIMEOUT, default="10min"):
-                cv.positive_time_period_milliseconds,
+            cv.Optional(CONF_MAINTENANCE_TIMEOUT, default="10min"): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_CONNECTED): binary_sensor.binary_sensor_schema(
                 device_class=DEVICE_CLASS_CONNECTIVITY,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
