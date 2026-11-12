@@ -5,11 +5,11 @@
   "latest": "0.0",
   "versions": [
     {
-      "firmware_version": "0.0",
-      "radio_version": "0.0.0",
-      "release_type": "release",
-      "sha256": "<actual SHA-256 hash>",
-      "file": "https://github.com/OWNER/esphome-radio-firmware/releases/download/v1.1/firmware-1.1.gbl"
+      "firmware_version": "0.1",
+      "radio_version": "9.1.2",
+      "release_type": "beta",
+      "sha256": "7bdbf32af5b11f3ce08ee60828bf65d8ba3490794b903076dd0d6a125234e76d",
+      "file": "https://github.com/Astute4185/tubeszb_mgm210_firmware/releases/download/DevSample-4v1/tubeszb_mgm210_zha_2023_9_1_2_9.1.2.0.gbl"
     }
 ]
 }
