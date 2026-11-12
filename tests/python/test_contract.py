@@ -127,3 +127,41 @@ def test_ci_runs_real_compile_gate():
     workflow = (ROOT / ".github/workflows/ci.yaml").read_text()
     assert "esphome compile" in compile_script
     assert "./scripts/compile.sh" in workflow
+
+
+def test_bridge_health_entities_and_wiring():
+    schema = (COMPONENT / "__init__.py").read_text()
+    header = (COMPONENT / "esphome_radio_bridge.h").read_text()
+    source = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
+    health = (COMPONENT / "bridge_health.h").read_text()
+    for key, setter in (
+        ("bridge_ready", "set_bridge_ready_sensor"),
+        ("bridge_status", "set_bridge_status_sensor"),
+        ("last_disconnect_reason", "set_last_disconnect_reason_sensor"),
+        ("transport_errors", "set_transport_errors_sensor"),
+    ):
+        assert f'"{key}"' in schema
+        assert setter in schema
+        assert setter in header
+    assert "evaluate_bridge_health(" in source
+    assert "listener_retry_due(" in source
+    assert "publish_initial_state(" in source
+    assert "NETWORK_OFFLINE" in health
+    assert "MAINTENANCE" in health
+    assert "REMOTE_CLOSED" in health
+    assert "NETWORK_LOST" in health
+    assert "is_transport_error(" in health
+
+
+def test_bridge_health_test_yaml_defines_diagnostics():
+    fixture = yaml.load(
+        (ROOT / "tests/components/esphome-radio-bridge/test.esp32-idf.yaml").read_text(),
+        Loader=Loader,
+    )
+    full_example = yaml.load((ROOT / "examples/tubeszb-mgm210-poe-2023.yaml").read_text(), Loader=Loader)
+    for doc in (fixture, full_example):
+        config = doc[COMPONENT.name]
+        for field in ("bridge_ready", "bridge_status", "last_disconnect_reason", "transport_errors"):
+            assert config[field]["name"]
+        assert "connected" in config
+        assert "disconnects" in config

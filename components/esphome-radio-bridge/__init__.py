@@ -25,6 +25,10 @@ CONF_DRIVER = "driver"
 CONF_TCP_PORT = "tcp_port"
 CONF_MAINTENANCE_TIMEOUT = "maintenance_timeout"
 CONF_CONNECTED = "connected"
+CONF_BRIDGE_READY = "bridge_ready"
+CONF_BRIDGE_STATUS = "bridge_status"
+CONF_LAST_DISCONNECT_REASON = "last_disconnect_reason"
+CONF_TRANSPORT_ERRORS = "transport_errors"
 CONF_DISCONNECTS = "disconnects"
 CONF_MODE = "mode"
 CONF_FLASH_ARMED = "flash_armed"
@@ -47,6 +51,20 @@ CONFIG_SCHEMA = cv.All(
             cv.Required(CONF_DRIVER): cv.one_of(*BOARD_DRIVERS, lower=True),
             cv.Optional(CONF_TCP_PORT, default=6638): cv.port,
             cv.Optional(CONF_MAINTENANCE_TIMEOUT, default="10min"): cv.positive_time_period_milliseconds,
+            cv.Optional(CONF_BRIDGE_READY): binary_sensor.binary_sensor_schema(
+                device_class=DEVICE_CLASS_CONNECTIVITY,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_BRIDGE_STATUS): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_LAST_DISCONNECT_REASON): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_TRANSPORT_ERRORS): sensor.sensor_schema(
+                accuracy_decimals=0,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
             cv.Optional(CONF_CONNECTED): binary_sensor.binary_sensor_schema(
                 device_class=DEVICE_CLASS_CONNECTIVITY,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
@@ -86,6 +104,18 @@ async def to_code(config):
     cg.add(var.set_tcp_port(config[CONF_TCP_PORT]))
     cg.add(var.set_maintenance_timeout(config[CONF_MAINTENANCE_TIMEOUT].total_milliseconds))
 
+    if conf := config.get(CONF_BRIDGE_READY):
+        entity = await binary_sensor.new_binary_sensor(conf)
+        cg.add(var.set_bridge_ready_sensor(entity))
+    if conf := config.get(CONF_BRIDGE_STATUS):
+        entity = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_bridge_status_sensor(entity))
+    if conf := config.get(CONF_LAST_DISCONNECT_REASON):
+        entity = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_last_disconnect_reason_sensor(entity))
+    if conf := config.get(CONF_TRANSPORT_ERRORS):
+        entity = await sensor.new_sensor(conf)
+        cg.add(var.set_transport_errors_sensor(entity))
     if conf := config.get(CONF_CONNECTED):
         entity = await binary_sensor.new_binary_sensor(conf)
         cg.add(var.set_connected_sensor(entity))

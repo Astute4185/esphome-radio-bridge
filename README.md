@@ -26,7 +26,7 @@ external_components:
   - source:
       type: local
       path: components
-    components: [serial_radio_gateway]
+    components: [esphome-radio-bridge]
 
 logger:
   baud_rate: 0
@@ -36,9 +36,13 @@ api:
 ota:
   - platform: esphome
 
-serial_radio_gateway:
+esphome-radio-bridge:
   driver: tubeszb_mgm210_poe_2023
   tcp_port: 6638
+  bridge_ready:
+    name: Radio Bridge Ready
+  bridge_status:
+    name: Radio Bridge Status
   connected:
     name: Radio TCP Client Connected
   flash_armed:
@@ -76,22 +80,21 @@ See [Adding a driver](docs/adding_drivers.md),
 ### Repository layout
 
 ```text
-components/serial_radio_gateway/
+components/esphome-radio-bridge/
   __init__.py                 # ESPHome config schema and code generation
-  serial_radio_gateway.h/.cpp # TCP bridge, lifecycle, HA entities
+  esphome_radio_bridge.h/.cpp # TCP bridge, lifecycle, HA entities
+  bridge_health.h             # host-tested bridge readiness and failure classification
   byte_ring.h                 # bounded transport buffers
   mode_policy.h               # host-testable transition rules
-  uart_modes/
-    uart_mode.h                # mode contract, pin validation, test interface
-    two_wire.h                 # TX/RX signalling strategy
-    four_wire.h                # TX/RX/RTS/CTS signalling strategy
-    mode_factory.h             # reusable mode selection
-    esp_idf_uart_bus.h         # ESP-IDF peripheral adapter
-  drivers/
-    board_driver.h           # generic board abstraction and pin validation
-    board_factory.h          # production driver registry
-    tubeszb_mgm210_poe_2023_profile.h # pure host-testable board definition
-    tubeszb_mgm210_poe_2023.h # ESP-IDF GPIO-specific radio control
+  uart_mode.h               # mode contract, pin validation and test interface
+  two_wire.h                # TX/RX signalling strategy
+  four_wire.h               # TX/RX/RTS/CTS signalling strategy
+  mode_factory.h            # reusable mode selection
+  esp_idf_uart_bus.h        # ESP-IDF peripheral adapter
+  board_driver.h            # board abstraction and pin validation
+  board_factory.h           # production driver registry
+  tubeszb_mgm210_poe_2023_profile.h # host-testable board definition
+  tubeszb_mgm210_poe_2023.h # ESP-IDF GPIO-specific control
 packages/
   esp32-wrover-lan8720.yaml   # shared ESP32/Ethernet hardware
 examples/
@@ -137,21 +140,45 @@ coordinator integration to be stopped and maintenance armed.
 
 ## Development
 
-Python 3.11+ plus C++17 compiler, `clang-format` and ESPHome 2026.10.1 for
+Python 3.11+ plus C++17 compiler, `clang-format` and ESPHome 2026.10.2 for
 validation and firmware builds:
 
 ```bash
 python -m pip install -e '.[dev]'
 ./scripts/lint.sh       # Ruff, yamllint, clang-format, shell syntax
 ./scripts/test.sh       # pytest + native C++ tests
-python -m pip install esphome==2026.10.1
+python -m pip install esphome==2026.10.2
 ./scripts/validate.sh   # ESPHome config for both supplied examples
-COMPILE=1 ./scripts/validate.sh  # also compile the full ESP32 firmware
+./scripts/compile.sh    # full ESP-IDF firmware compilation
 ```
 
 GitHub Actions runs the same checks and a build. `examples/secrets.yaml` is
-created by `validate.sh` using obviously non-production placeholders if absent.
+created by `validate.sh` using a randomly generated API key if absent.
 Never use the supplied example secrets on an internet-exposed device.
+
+## Bridge health monitoring
+
+The bridge exposes optional diagnostic entities through the same component YAML:
+
+| Option | HA entity | Meaning |
+| --- | --- | --- |
+| `bridge_ready` | Binary sensor | UART ready, Ethernet connected, TCP listener running and application mode active |
+| `bridge_status` | Text sensor | Starting, Ready, Network offline, TCP listener unavailable, Maintenance, Failed or Stopped |
+| `connected` | Binary sensor | A TCP client is connected (not confirmation of Zigbee protocol health) |
+| `disconnects` | Counter sensor | Every closed accepted TCP client session, including planned shutdowns |
+| `last_disconnect_reason` | Text sensor | Remote closed, TCP socket error, Network lost, Maintenance timeout or ESP32 shutdown |
+| `transport_errors` | Counter sensor | Listener failures, network loss affecting an active TCP client, and socket errors |
+
+`bridge_ready` deliberately reports **OFF during bootloader maintenance** and
+**ON even with no TCP client** when the network service is listening. This is
+transport health, not a Zigbee coordinator heartbeat. A remote TCP close may be
+a planned ZHA restart, so it is not counted as a transport error. For HA alerts,
+exclude intentional maintenance and use a persistence delay for disconnections.
+
+Failed TCP listener creation/binding is retried every five seconds without
+blocking the ESPHome event loop. It does not permanently fail the component.
+Counters reset after ESP32 reboot. Additional firmware-probing support is
+planned for a later feature branch.
 
 ## Host Gecko flashing (only MGM/Gecko drivers)
 

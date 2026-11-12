@@ -33,6 +33,10 @@ esphome-radio-bridge:
     name: EFR32 Enter Bootloader
   exit_bootloader:
     name: EFR32 Exit Bootloader
+  bridge_ready:
+    name: Radio Bridge Ready
+  bridge_status:
+    name: Radio Bridge Status
   connected:
     name: Zigbee TCP Client Connected
   mode:
