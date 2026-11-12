@@ -82,15 +82,19 @@ void RadioBridge::report_error_(const char* message) {
 }
 
 void RadioBridge::publish_radio_identity_(const identification::RadioIdentity& identity) {
-  if (reported_firmware_ != identity.firmware) {
+  const bool version_changed = reported_firmware_ != identity.firmware;
+  if (version_changed) {
     reported_firmware_ = identity.firmware;
     if (installed_firmware_sensor_ != nullptr) installed_firmware_sensor_->publish_state(identity.firmware);
   }
+  const bool old_responding = installed_radio_responding_;
+  installed_radio_responding_ = identity.responding;
   if (reported_identification_status_ != identity.status) {
     reported_identification_status_ = identity.status;
     if (radio_identification_status_sensor_ != nullptr)
       radio_identification_status_sensor_->publish_state(identity.status);
   }
+  if (version_changed || old_responding != installed_radio_responding_) this->publish_update_assessment_();
 }
 
 void RadioBridge::begin_radio_identification_() {
@@ -373,12 +377,17 @@ void RadioBridge::loop() {
   if (catalogue_.collect(completed)) {
     if (catalogue_source_epoch_ == catalogue_request_epoch_) {
       catalogue_result_ = std::move(completed);
+      last_update_check_succeeded_ = catalogue_result_.ok;
+      last_update_check_ms_ = millis();  // Count the interval from completion, not start.
+      this->publish_update_assessment_();
       this->publish_catalogue_status_(catalogue_result_.ok ? catalogue_result_.message
                                                            : "Error: " + catalogue_result_.message);
     } else {
+      has_update_check_attempt_ = false;  // Discard an obsolete in-flight request.
       this->publish_catalogue_status_("Idle: source changed; refresh required");
     }
   }
+  this->check_for_updates_if_due_();
   if (!uart_.ready() || error_) return;
   if (identifying_) {
     this->poll_radio_identification_();
@@ -425,8 +434,52 @@ bool RadioBridge::set_manifest_override_url(const std::string& url) {
   manifest_override_url_ = url;
   ++catalogue_source_epoch_;
   catalogue_result_ = {};
+  has_update_check_attempt_ = false;  // Schedule an immediate check against the new source.
+  this->clear_update_entities_();
   this->publish_catalogue_status_("Idle: source changed; refresh required");
   return true;
+}
+
+void RadioBridge::clear_update_entities_() {
+  if (latest_firmware_sensor_ != nullptr && latest_firmware_sensor_->has_state())
+    latest_firmware_sensor_->publish_state("Unknown");
+  if (update_available_sensor_ != nullptr && update_available_sensor_->has_state())
+    update_available_sensor_->invalidate_state();
+}
+
+void RadioBridge::publish_update_assessment_() {
+  if (!catalogue_result_.ok) {
+    this->clear_update_entities_();
+    return;
+  }
+  if (latest_firmware_sensor_ != nullptr) {
+    const std::string latest = catalogue_result_.latest.empty() ? "None" : catalogue_result_.latest;
+    if (!latest_firmware_sensor_->has_state() || latest_firmware_sensor_->state != latest)
+      latest_firmware_sensor_->publish_state(latest);
+  }
+  const auto assessment =
+      firmware::assess_update(catalogue_result_, reported_firmware_, installed_radio_responding_);
+  if (update_available_sensor_ == nullptr) return;
+  if (assessment.availability == firmware::UpdateAvailability::UNKNOWN) {
+    if (update_available_sensor_->has_state()) update_available_sensor_->invalidate_state();
+    ESP_LOGD(TAG, "Firmware update availability unknown: %s", assessment.reason);
+    return;
+  }
+  const bool available = assessment.availability == firmware::UpdateAvailability::AVAILABLE;
+  if (!update_available_sensor_->has_state())
+    update_available_sensor_->publish_initial_state(available);
+  else if (update_available_sensor_->state != available)
+    update_available_sensor_->publish_state(available);
+}
+
+void RadioBridge::check_for_updates_if_due_() {
+  // Network-only metadata checks must never take ownership of the radio UART.
+  if (http_request_ == nullptr || (catalogue_url_.empty() && manifest_override_url_.empty()) ||
+      !network::is_connected() || catalogue_.busy())
+    return;
+  if (firmware::update_check_due(has_update_check_attempt_, millis(), last_update_check_ms_,
+                                 last_update_check_succeeded_))
+    this->refresh_catalogue();
 }
 
 void RadioBridge::refresh_catalogue() {
@@ -443,6 +496,9 @@ void RadioBridge::refresh_catalogue() {
     this->publish_catalogue_status_("Error: network offline");
     return;
   }
+  has_update_check_attempt_ = true;
+  last_update_check_ms_ = millis();
+  last_update_check_succeeded_ = false;  // A failed launch retries after the backoff.
   const auto& board = driver_->profile();
   if (!catalogue_.start(http_request_, catalogue_url_, manifest_override_url_, board.id, board.radio_type)) {
     this->publish_catalogue_status_("Error: unable to start catalogue request");

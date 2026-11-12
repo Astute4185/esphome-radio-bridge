@@ -34,6 +34,12 @@ esphome-radio-bridge:
     name: Firmware Catalogue Status
   refresh_catalogue:
     name: Refresh Firmware Catalogue
+  check_updates:
+    name: EFR32 Check for Updates
+  latest_firmware:
+    name: EFR32 Latest Firmware
+  update_available:
+    name: EFR32 Update Available
   driver: tubeszb_mgm210_poe_2023
   tcp_port: 6638
   flash_armed:
