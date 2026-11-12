@@ -3,8 +3,9 @@
 #include <cstdint>
 #include <memory>
 
+#include "board_factory.h"
 #include "byte_ring.h"
-#include "drivers/board_factory.h"
+#include "esp_idf_uart_bus.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/button/button.h"
 #include "esphome/components/sensor/sensor.h"
@@ -12,7 +13,6 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 #include "mode_policy.h"
-#include "uart_modes/esp_idf_uart_bus.h"
 
 namespace esphome::esphome_radio_bridge {
 

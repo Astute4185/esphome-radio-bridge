@@ -3,10 +3,10 @@
 #include <cstring>
 #include <memory>
 
+#include "board_driver.h"
 #include "byte_ring.h"
-#include "drivers/board_driver.h"
-#include "drivers/tubeszb_mgm210_poe_2023_profile.h"
 #include "mode_policy.h"
+#include "tubeszb_mgm210_poe_2023_profile.h"
 
 using namespace esphome::esphome_radio_bridge;
 

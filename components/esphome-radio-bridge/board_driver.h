@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "../uart_modes/uart_mode.h"
+#include "uart_mode.h"
 
 namespace esphome::esphome_radio_bridge::drivers {
 

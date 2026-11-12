@@ -2,8 +2,8 @@
 #include <string>
 #include <vector>
 
-#include "drivers/tubeszb_mgm210_poe_2023_profile.h"
-#include "uart_modes/mode_factory.h"
+#include "mode_factory.h"
+#include "tubeszb_mgm210_poe_2023_profile.h"
 using namespace esphome::esphome_radio_bridge::uart_modes;
 class FakeUart : public UartHardware {
  public:

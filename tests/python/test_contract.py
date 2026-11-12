@@ -24,15 +24,15 @@ def test_external_component_layout():
         "mode_policy.h",
         "esphome_radio_bridge.h",
         "esphome_radio_bridge.cpp",
-        "drivers/board_driver.h",
-        "uart_modes/uart_mode.h",
-        "uart_modes/two_wire.h",
-        "uart_modes/four_wire.h",
-        "uart_modes/mode_factory.h",
-        "uart_modes/esp_idf_uart_bus.h",
-        "drivers/board_factory.h",
-        "drivers/tubeszb_mgm210_poe_2023.h",
-        "drivers/tubeszb_mgm210_poe_2023_profile.h",
+        "board_driver.h",
+        "uart_mode.h",
+        "two_wire.h",
+        "four_wire.h",
+        "mode_factory.h",
+        "esp_idf_uart_bus.h",
+        "board_factory.h",
+        "tubeszb_mgm210_poe_2023.h",
+        "tubeszb_mgm210_poe_2023_profile.h",
     ):
         assert (COMPONENT / name).exists()
     schema = (COMPONENT / "__init__.py").read_text()
@@ -45,7 +45,7 @@ def test_external_component_layout():
 
 
 def test_board_specific_mapping_is_isolated():
-    board = (COMPONENT / "drivers/tubeszb_mgm210_poe_2023_profile.h").read_text()
+    board = (COMPONENT / "tubeszb_mgm210_poe_2023_profile.h").read_text()
     assert re.search(r"\b1,\s*4,\s*36,\s*2,\s*13,\s*122", board)
     assert "UartModeId::FOUR_WIRE" in board
     assert "UartModeId::TWO_WIRE" in board
@@ -56,7 +56,7 @@ def test_board_specific_mapping_is_isolated():
     assert "uart_set_hw_flow_ctrl" not in core
     assert "uart_set_pin" not in core
     assert "uart_.configure" in core
-    assert "uart_set_hw_flow_ctrl" in (COMPONENT / "uart_modes/esp_idf_uart_bus.h").read_text()
+    assert "uart_set_hw_flow_ctrl" in (COMPONENT / "esp_idf_uart_bus.h").read_text()
     schema = (COMPONENT / "__init__.py").read_text()
     assert 'CONF_DRIVER = "driver"' in schema
     assert '"hardware_flow_control"' not in schema
@@ -102,7 +102,7 @@ def test_shared_baseboard_package_is_radio_agnostic():
 
 
 def test_driver_owns_uart_mode_selection():
-    driver = (COMPONENT / "drivers/board_driver.h").read_text()
+    driver = (COMPONENT / "board_driver.h").read_text()
     core = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
     schema = (COMPONENT / "__init__.py").read_text()
     assert "normal_uart_mode" in driver
@@ -110,3 +110,20 @@ def test_driver_owns_uart_mode_selection():
     assert "board.normal_uart_mode" in core
     assert "board.bootloader_uart_mode" in core
     assert '"uart_mode"' not in schema
+
+
+def test_component_cpp_files_are_placed_at_root():
+    # ESPHome copies C++ sources/headers from the component directory itself.
+    assert not (COMPONENT / "drivers").exists()
+    assert not (COMPONENT / "uart_modes").exists()
+    for source in COMPONENT.glob("*.[ch]*"):
+        content = source.read_text()
+        assert '#include "drivers/' not in content
+        assert '#include "uart_modes/' not in content
+
+
+def test_ci_runs_real_compile_gate():
+    compile_script = (ROOT / "scripts/compile.sh").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yaml").read_text()
+    assert "esphome compile" in compile_script
+    assert "./scripts/compile.sh" in workflow

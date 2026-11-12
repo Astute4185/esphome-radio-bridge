@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install pinned ESPHome
-        run: python -m pip install esphome==2026.10.1
+        run: python -m pip install esphome==2026.10.2
       - name: Validate configurations
         run: ./scripts/validate.sh
   build-esp32:
@@ -45,8 +45,8 @@ jobs:
           path: |
             ~/.platformio
             ~/.cache/platformio
-          key: platformio-${{ runner.os }}-serial-gateway-2026.10.1
+          key: platformio-${{ runner.os }}-esphome-radio-bridge-2026.10.2
       - name: Install pinned ESPHome
-        run: python -m pip install esphome==2026.10.1
+        run: python -m pip install esphome==2026.10.2
       - name: Compile ESP32 firmware
-        run: COMPILE=1 ./scripts/validate.sh
+        run: ./scripts/compile.sh

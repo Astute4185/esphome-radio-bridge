@@ -237,8 +237,7 @@ void RadioBridge::send_tcp_() {
 }
 
 void RadioBridge::loop() {
-  if (!uart_.ready() || error_
-    return;
+  if (!uart_.ready() || error_) return;
   if (!network::is_connected()) {
     this->close_client_();
     this->close_listener_();

@@ -34,7 +34,7 @@ CONF_EXIT_BOOTLOADER = "exit_bootloader"
 
 ns = cg.esphome_ns.namespace("esphome_radio_bridge")
 RadioBridge = ns.class_("RadioBridge", cg.Component)
-BoardModel = ns.namespace("drivers").enum("BoardModel")
+BoardModel = ns.namespace("drivers").enum("BoardModel", is_class=True)
 RadioResetButton = ns.class_("RadioResetButton", button.Button)
 EnterBootloaderButton = ns.class_("EnterBootloaderButton", button.Button)
 ExitBootloaderButton = ns.class_("ExitBootloaderButton", button.Button)
