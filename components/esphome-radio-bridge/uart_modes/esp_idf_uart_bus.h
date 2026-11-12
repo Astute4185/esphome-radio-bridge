@@ -5,7 +5,7 @@
 #include "driver/uart.h"
 #include "esp_err.h"
 #include "mode_factory.h"
-namespace esphome::serial_radio_gateway::uart_modes {
+namespace esphome::esphome_radio_bridge::uart_modes {
 // Owns the ESP-IDF UART. The gateway does not call uart_* functions directly.
 class EspIdfUartBus final : private UartHardware {
  public:
@@ -62,4 +62,4 @@ class EspIdfUartBus final : private UartHardware {
   uart_port_t port_{UART_NUM_1};
   bool ready_{false};
 };
-}  // namespace esphome::serial_radio_gateway::uart_modes
+}  // namespace esphome::esphome_radio_bridge::uart_modes

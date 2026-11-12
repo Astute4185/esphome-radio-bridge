@@ -14,9 +14,9 @@
 #include "mode_policy.h"
 #include "uart_modes/esp_idf_uart_bus.h"
 
-namespace esphome::serial_radio_gateway {
+namespace esphome::esphome_radio_bridge {
 
-class SerialRadioGateway : public Component {
+class RadioBridge : public Component {
  public:
   void setup() override;
   void loop() override;
@@ -72,41 +72,41 @@ class SerialRadioGateway : public Component {
 
 class RadioResetButton : public button::Button {
  public:
-  explicit RadioResetButton(SerialRadioGateway* parent) : parent_(parent) {}
+  explicit RadioResetButton(RadioBridge* parent) : parent_(parent) {}
 
  protected:
   void press_action() override { parent_->radio_reset(); }
-  SerialRadioGateway* parent_;
+  RadioBridge* parent_;
 };
 
 class EnterBootloaderButton : public button::Button {
  public:
-  explicit EnterBootloaderButton(SerialRadioGateway* parent) : parent_(parent) {}
+  explicit EnterBootloaderButton(RadioBridge* parent) : parent_(parent) {}
 
  protected:
   void press_action() override { parent_->enter_bootloader(); }
-  SerialRadioGateway* parent_;
+  RadioBridge* parent_;
 };
 
 class ExitBootloaderButton : public button::Button {
  public:
-  explicit ExitBootloaderButton(SerialRadioGateway* parent) : parent_(parent) {}
+  explicit ExitBootloaderButton(RadioBridge* parent) : parent_(parent) {}
 
  protected:
   void press_action() override { parent_->exit_bootloader(); }
-  SerialRadioGateway* parent_;
+  RadioBridge* parent_;
 };
 
 class FlashArmedSwitch : public switch_::Switch {
  public:
-  explicit FlashArmedSwitch(SerialRadioGateway* parent) : parent_(parent) {}
+  explicit FlashArmedSwitch(RadioBridge* parent) : parent_(parent) {}
 
  protected:
   void write_state(bool state) override {
     parent_->set_armed(state);
     this->publish_state(state);
   }
-  SerialRadioGateway* parent_;
+  RadioBridge* parent_;
 };
 
-}  // namespace esphome::serial_radio_gateway
+}  // namespace esphome::esphome_radio_bridge

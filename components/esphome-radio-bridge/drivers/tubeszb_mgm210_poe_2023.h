@@ -6,7 +6,7 @@
 #include "freertos/task.h"
 #include "tubeszb_mgm210_poe_2023_profile.h"
 
-namespace esphome::serial_radio_gateway::drivers {
+namespace esphome::esphome_radio_bridge::drivers {
 
 class TubesZbMgm210Poe2023Driver final : public BoardDriver {
  public:
@@ -56,4 +56,4 @@ class TubesZbMgm210Poe2023Driver final : public BoardDriver {
   }
 };
 
-}  // namespace esphome::serial_radio_gateway::drivers
+}  // namespace esphome::esphome_radio_bridge::drivers

@@ -4,7 +4,7 @@
 
 #include "../uart_modes/uart_mode.h"
 
-namespace esphome::serial_radio_gateway::drivers {
+namespace esphome::esphome_radio_bridge::drivers {
 
 // Firmware protocol is metadata, not an instruction to the gateway TCP bridge.
 enum class FirmwareProtocol : uint8_t { NONE, GECKO_XMODEM_CRC };
@@ -52,4 +52,4 @@ class BoardDriver {
   virtual void shutdown() = 0;
 };
 
-}  // namespace esphome::serial_radio_gateway::drivers
+}  // namespace esphome::esphome_radio_bridge::drivers

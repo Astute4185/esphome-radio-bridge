@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-COMPONENT = ROOT / "components" / "serial_radio_gateway"
+COMPONENT = ROOT / "components" / "esphome-radio-bridge"
 
 
 class Loader(yaml.SafeLoader):
@@ -22,8 +22,8 @@ def test_external_component_layout():
         "__init__.py",
         "byte_ring.h",
         "mode_policy.h",
-        "serial_radio_gateway.h",
-        "serial_radio_gateway.cpp",
+        "esphome_radio_bridge.h",
+        "esphome_radio_bridge.cpp",
         "drivers/board_driver.h",
         "uart_modes/uart_mode.h",
         "uart_modes/two_wire.h",
@@ -35,7 +35,13 @@ def test_external_component_layout():
         "drivers/tubeszb_mgm210_poe_2023_profile.h",
     ):
         assert (COMPONENT / name).exists()
-    assert 'DOMAIN = "serial_radio_gateway"' in (COMPONENT / "__init__.py").read_text()
+    schema = (COMPONENT / "__init__.py").read_text()
+    assert f'DOMAIN = "{COMPONENT.name}"' in schema
+    # C++ identifiers cannot contain hyphens, so the C++ namespace uses underscores.
+    assert 'ns = cg.esphome_ns.namespace("esphome_radio_bridge")' in schema
+    assert (
+        "namespace esphome::esphome_radio_bridge" in (COMPONENT / "esphome_radio_bridge.h").read_text()
+    )
 
 
 def test_board_specific_mapping_is_isolated():
@@ -44,7 +50,7 @@ def test_board_specific_mapping_is_isolated():
     assert "UartModeId::FOUR_WIRE" in board
     assert "UartModeId::TWO_WIRE" in board
     assert re.search(r"\b5,\s*16,\s*// RESET", board)
-    core = (COMPONENT / "serial_radio_gateway.cpp").read_text()
+    core = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
     assert "TUBESZB_MGM210" not in core
     assert "board::" not in core
     assert "uart_set_hw_flow_ctrl" not in core
@@ -59,24 +65,24 @@ def test_board_specific_mapping_is_isolated():
 
 
 def test_yaml_examples_use_driver_and_generic_core():
-    for path in (ROOT / "examples").glob("*.yaml"):
-        if path.name == "secrets.example.yaml":
-            continue
+    for path in (ROOT / "examples").glob("tubeszb-*.yaml"):
         config = yaml.load(path.read_text(), Loader=Loader)
-        assert "serial_radio_gateway" in config
-        assert config["serial_radio_gateway"]["driver"] == "tubeszb_mgm210_poe_2023"
+        assert COMPONENT.name in config
+        assert config["external_components"][0]["components"] == [COMPONENT.name]
+        assert config["esphome-radio-bridge"]["driver"] == "tubeszb_mgm210_poe_2023"
         assert "uart" not in config
         assert "stream_server" not in config
         assert "efr32_flasher" not in config
         assert "board_network" in config["packages"]
         assert "esp32-wrover-lan8720.yaml" in config["packages"]["board_network"]
-        assert config["serial_radio_gateway"]["tcp_port"] == 6638
+        assert config["esphome-radio-bridge"]["tcp_port"] == 6638
 
 
 def test_esphome_build_fixture():
-    path = ROOT / "tests/components/serial_radio_gateway/test.esp32-idf.yaml"
+    path = ROOT / "tests/components/esphome-radio-bridge/test.esp32-idf.yaml"
     doc = yaml.load(path.read_text(), Loader=Loader)
-    assert doc["serial_radio_gateway"]["driver"] == "tubeszb_mgm210_poe_2023"
+    assert doc[COMPONENT.name]["driver"] == "tubeszb_mgm210_poe_2023"
+    assert doc["external_components"][0]["components"] == [COMPONENT.name]
     assert "board_driver" not in doc
 
 
@@ -91,13 +97,13 @@ def test_shared_baseboard_package_is_radio_agnostic():
     assert pkg["esp32"]["board"] == "esp-wrover-kit"
     assert pkg["esp32"]["framework"]["type"] == "esp-idf"
     assert pkg["ethernet"]["type"] == "LAN8720"
-    assert "serial_radio_gateway" not in pkg
+    assert "esphome-radio-bridge" not in pkg
     assert "tubeszb_mgm210" not in repr(pkg)
 
 
 def test_driver_owns_uart_mode_selection():
     driver = (COMPONENT / "drivers/board_driver.h").read_text()
-    core = (COMPONENT / "serial_radio_gateway.cpp").read_text()
+    core = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
     schema = (COMPONENT / "__init__.py").read_text()
     assert "normal_uart_mode" in driver
     assert "bootloader_uart_mode" in driver

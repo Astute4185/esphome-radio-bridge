@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace esphome::serial_radio_gateway {
+namespace esphome::esphome_radio_bridge {
 // A bounded, allocation-free SPSC buffer; calls are made from the ESPHome loop.
 template <size_t N>
 class ByteRing {
@@ -44,4 +44,4 @@ class ByteRing {
   size_t tail_{0};
   size_t size_{0};
 };
-}  // namespace esphome::serial_radio_gateway
+}  // namespace esphome::esphome_radio_bridge

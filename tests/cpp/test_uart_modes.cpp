@@ -4,7 +4,7 @@
 
 #include "drivers/tubeszb_mgm210_poe_2023_profile.h"
 #include "uart_modes/mode_factory.h"
-using namespace esphome::serial_radio_gateway::uart_modes;
+using namespace esphome::esphome_radio_bridge::uart_modes;
 class FakeUart : public UartHardware {
  public:
   bool set_pins(int tx, int rx, int rts, int cts) override {
@@ -28,7 +28,7 @@ int main() {
   FakeUart hw;
   assert(mode_strategy(UartModeId::TWO_WIRE).apply(hw, two));
   assert((hw.calls == std::vector<std::string>{"flow:off:0", "pins:17,16,-1,-1"}));
-  constexpr auto mgm = esphome::serial_radio_gateway::drivers::TUBESZB_MGM210_POE_2023;
+  constexpr auto mgm = esphome::esphome_radio_bridge::drivers::TUBESZB_MGM210_POE_2023;
   hw.calls.clear();
   assert(mode_strategy(mgm.normal_uart_mode).apply(hw, mgm.uart));
   assert(mode_strategy(mgm.bootloader_uart_mode).apply(hw, mgm.uart));

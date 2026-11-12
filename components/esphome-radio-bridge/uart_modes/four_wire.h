@@ -1,6 +1,6 @@
 #pragma once
 #include "uart_mode.h"
-namespace esphome::serial_radio_gateway::uart_modes {
+namespace esphome::esphome_radio_bridge::uart_modes {
 class FourWireMode final : public UartModeStrategy {
  public:
   UartModeId id() const override { return UartModeId::FOUR_WIRE; }
@@ -10,4 +10,4 @@ class FourWireMode final : public UartModeStrategy {
            hw.set_flow_control(true, p.rts_threshold);
   }
 };
-}  // namespace esphome::serial_radio_gateway::uart_modes
+}  // namespace esphome::esphome_radio_bridge::uart_modes

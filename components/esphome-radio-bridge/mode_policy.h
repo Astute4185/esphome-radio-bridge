@@ -1,6 +1,6 @@
 #pragma once
 
-namespace esphome::serial_radio_gateway {
+namespace esphome::esphome_radio_bridge {
 enum class Mode { NORMAL, BOOTLOADER };
 enum class Command { RESET, ENTER_BOOTLOADER, EXIT_BOOTLOADER };
 
@@ -16,4 +16,4 @@ constexpr bool allowed(Mode mode, Command command, bool armed, bool tcp_connecte
   return false;
 }
 
-}  // namespace esphome::serial_radio_gateway
+}  // namespace esphome::esphome_radio_bridge

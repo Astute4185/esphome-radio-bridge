@@ -8,7 +8,7 @@
 #include "drivers/tubeszb_mgm210_poe_2023_profile.h"
 #include "mode_policy.h"
 
-using namespace esphome::serial_radio_gateway;
+using namespace esphome::esphome_radio_bridge;
 
 static void test_policy() {
   static_assert(allowed(Mode::NORMAL, Command::ENTER_BOOTLOADER, true, false));
@@ -22,10 +22,10 @@ static void test_policy() {
   static_assert(!allowed(Mode::BOOTLOADER, Command::EXIT_BOOTLOADER, false, true));
 }
 
-class MockBoardDriver final : public esphome::serial_radio_gateway::drivers::BoardDriver {
+class MockBoardDriver final : public esphome::esphome_radio_bridge::drivers::BoardDriver {
  public:
-  explicit MockBoardDriver(const esphome::serial_radio_gateway::drivers::BoardProfile& p) : profile_(p) {}
-  const esphome::serial_radio_gateway::drivers::BoardProfile& profile() const override { return profile_; }
+  explicit MockBoardDriver(const esphome::esphome_radio_bridge::drivers::BoardProfile& p) : profile_(p) {}
+  const esphome::esphome_radio_bridge::drivers::BoardProfile& profile() const override { return profile_; }
   bool setup() override {
     ++calls_;
     return true;
@@ -46,11 +46,11 @@ class MockBoardDriver final : public esphome::serial_radio_gateway::drivers::Boa
   int calls_{0};
 
  private:
-  const esphome::serial_radio_gateway::drivers::BoardProfile& profile_;
+  const esphome::esphome_radio_bridge::drivers::BoardProfile& profile_;
 };
 
 static void test_mock_driver_interface() {
-  using namespace esphome::serial_radio_gateway::drivers;
+  using namespace esphome::esphome_radio_bridge::drivers;
   MockBoardDriver device(TUBESZB_MGM210_POE_2023);
   BoardDriver& d = device;
   assert(d.setup());
@@ -63,7 +63,7 @@ static void test_mock_driver_interface() {
 }
 
 static void test_profile() {
-  using namespace esphome::serial_radio_gateway::drivers;
+  using namespace esphome::esphome_radio_bridge::drivers;
   using uart_modes::UartModeId;
   constexpr auto mgm = TUBESZB_MGM210_POE_2023;
   static_assert(valid_profile(mgm));

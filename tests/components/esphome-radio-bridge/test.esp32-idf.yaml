@@ -1,6 +1,6 @@
 # ESPHome component compile fixture (no secrets; safe for CI).
 esphome:
-  name: test-serial-radio-gateway
+  name: test-esphome-radio-bridge
   min_version: 2026.10.1
 
 packages:
@@ -10,12 +10,12 @@ external_components:
   - source:
       type: local
       path: ../../../components
-    components: [serial_radio_gateway]
+    components: [esphome-radio-bridge]
 
 logger:
   baud_rate: 0
 
-serial_radio_gateway:
+esphome-radio-bridge:
   driver: tubeszb_mgm210_poe_2023
   tcp_port: 6638
   connected:

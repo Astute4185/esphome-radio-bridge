@@ -5,7 +5,7 @@
 #include "board_driver.h"
 #include "tubeszb_mgm210_poe_2023.h"
 
-namespace esphome::serial_radio_gateway::drivers {
+namespace esphome::esphome_radio_bridge::drivers {
 enum class BoardModel : uint8_t { TUBESZB_MGM210_POE_2023 };
 
 inline std::unique_ptr<BoardDriver> create_board_driver(BoardModel model) {
@@ -15,4 +15,4 @@ inline std::unique_ptr<BoardDriver> create_board_driver(BoardModel model) {
   }
   return nullptr;
 }
-}  // namespace esphome::serial_radio_gateway::drivers
+}  // namespace esphome::esphome_radio_bridge::drivers

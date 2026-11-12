@@ -1,0 +1,24 @@
+# ESP32 WROVER LAN8720 PoE baseboard; independent of the attached radio driver.
+esp32:
+  board: esp-wrover-kit
+  framework:
+    type: esp-idf
+    advanced:
+      flash_chip: generic
+      minimum_chip_revision: "3.1"
+      sram1_as_iram: true
+    sdkconfig_options:
+      CONFIG_LWIP_MAX_SOCKETS: "16"
+      CONFIG_PM_ENABLE: "n"
+      CONFIG_UART_ISR_IN_IRAM: "y"
+
+ethernet:
+  id: ethernet0
+  type: LAN8720
+  mdc_pin: GPIO23
+  mdio_pin: GPIO18
+  clk:
+    pin: GPIO17
+    mode: CLK_OUT
+  phy_addr: 0
+  power_pin: GPIO12

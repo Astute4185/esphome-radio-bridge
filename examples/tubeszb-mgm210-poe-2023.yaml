@@ -19,7 +19,7 @@ external_components:
   - source:
       type: local
       path: ../components
-    components: [serial_radio_gateway]
+    components: [esphome-radio-bridge]
 
 logger:
   level: ${log_lvl}
@@ -42,7 +42,7 @@ web_server:
     username: !secret web_server_username
     password: !secret web_server_password
 
-serial_radio_gateway:
+esphome-radio-bridge:
   id: zigbee_gateway
   driver: tubeszb_mgm210_poe_2023
   tcp_port: 6638

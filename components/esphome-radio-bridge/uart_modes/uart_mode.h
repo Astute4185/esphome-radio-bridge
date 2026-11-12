@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-namespace esphome::serial_radio_gateway::uart_modes {
+namespace esphome::esphome_radio_bridge::uart_modes {
 enum class UartModeId : uint8_t { TWO_WIRE, FOUR_WIRE };
 constexpr bool valid_uart_mode(UartModeId mode) {
   return mode == UartModeId::TWO_WIRE || mode == UartModeId::FOUR_WIRE;
@@ -39,4 +39,4 @@ constexpr bool valid_uart_pinout(const UartPinout& p, UartModeId normal, UartMod
     return false;
   return p.tx != p.rts && p.tx != p.cts && p.rx != p.rts && p.rx != p.cts && p.rts != p.cts;
 }
-}  // namespace esphome::serial_radio_gateway::uart_modes
+}  // namespace esphome::esphome_radio_bridge::uart_modes

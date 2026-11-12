@@ -1,7 +1,7 @@
 [project]
-name = "serial-radio-gateway-development"
+name = "esphome-radio-bridge-development"
 version = "0.3.0"
-description = "Development and test tooling for the reusable ESPHome serial radio gateway and driver modules"
+description = "Development and test tooling for the ESPHome radio bridge and reusable radio drivers"
 requires-python = ">=3.11"
 dependencies = []
 
@@ -26,5 +26,5 @@ include = ["*.py", "pyproject.toml"]
 select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
-"components/serial_radio_gateway/__init__.py" = ["I001"]
+"components/esphome-radio-bridge/__init__.py" = ["I001"]
 "tests/python/test_flasher.py" = ["I001"]

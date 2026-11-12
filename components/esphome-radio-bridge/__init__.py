@@ -1,4 +1,4 @@
-"""ESP32/ESP-IDF serial radio TCP gateway with a pluggable board driver.
+"""ESPHome radio TCP bridge with a pluggable board driver.
 
 Every supported board must have normal-mode RTS/CTS wired. The board driver
 owns GPIO mapping, reset, bootloader entry, baud rates and bootloader UART mode.
@@ -14,7 +14,7 @@ from esphome.const import (
     ENTITY_CATEGORY_DIAGNOSTIC,
 )
 
-DOMAIN = "serial_radio_gateway"
+DOMAIN = "esphome-radio-bridge"
 DEPENDENCIES = ["esp32", "network"]
 AUTO_LOAD = ["binary_sensor", "button", "sensor", "switch", "text_sensor"]
 
@@ -32,8 +32,8 @@ CONF_RADIO_RESET = "radio_reset"
 CONF_ENTER_BOOTLOADER = "enter_bootloader"
 CONF_EXIT_BOOTLOADER = "exit_bootloader"
 
-ns = cg.esphome_ns.namespace(DOMAIN)
-SerialRadioGateway = ns.class_("SerialRadioGateway", cg.Component)
+ns = cg.esphome_ns.namespace("esphome_radio_bridge")
+RadioBridge = ns.class_("RadioBridge", cg.Component)
 BoardModel = ns.namespace("drivers").enum("BoardModel")
 RadioResetButton = ns.class_("RadioResetButton", button.Button)
 EnterBootloaderButton = ns.class_("EnterBootloaderButton", button.Button)
@@ -43,7 +43,7 @@ FlashArmedSwitch = ns.class_("FlashArmedSwitch", switch.Switch)
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(SerialRadioGateway),
+            cv.GenerateID(): cv.declare_id(RadioBridge),
             cv.Required(CONF_DRIVER): cv.one_of(*BOARD_DRIVERS, lower=True),
             cv.Optional(CONF_TCP_PORT, default=6638): cv.port,
             cv.Optional(CONF_MAINTENANCE_TIMEOUT, default="10min"): cv.positive_time_period_milliseconds,

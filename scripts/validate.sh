@@ -9,10 +9,10 @@ if [ ! -f examples/secrets.yaml ]; then
   cp examples/secrets.example.yaml examples/secrets.yaml
   echo "Created examples/secrets.yaml with a NON-PRODUCTION testing key."
 fi
-esphome config tests/components/serial_radio_gateway/test.esp32-idf.yaml
+esphome config tests/components/esphome-radio-bridge/test.esp32-idf.yaml
 esphome config examples/tubeszb-minimal.yaml
 esphome config examples/tubeszb-mgm210-poe-2023.yaml
 if [ "${COMPILE:-0}" = "1" ]; then
-  esphome compile tests/components/serial_radio_gateway/test.esp32-idf.yaml
+  esphome compile tests/components/esphome-radio-bridge/test.esp32-idf.yaml
   esphome compile examples/tubeszb-mgm210-poe-2023.yaml
 fi

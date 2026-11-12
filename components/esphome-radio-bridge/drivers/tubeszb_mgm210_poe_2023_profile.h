@@ -1,6 +1,6 @@
 #pragma once
 #include "board_driver.h"
-namespace esphome::serial_radio_gateway::drivers {
+namespace esphome::esphome_radio_bridge::drivers {
 // MGM210 PoE 2023: 4-wire RTS/CTS NCP application, 2-wire Gecko bootloader.
 inline constexpr BoardProfile TUBESZB_MGM210_POE_2023{
     "tubeszb_mgm210_poe_2023",
@@ -17,4 +17,4 @@ inline constexpr BoardProfile TUBESZB_MGM210_POE_2023{
     FirmwareProtocol::GECKO_XMODEM_CRC,
 };
 static_assert(valid_profile(TUBESZB_MGM210_POE_2023), "Invalid TubesZB board mapping");
-}  // namespace esphome::serial_radio_gateway::drivers
+}  // namespace esphome::esphome_radio_bridge::drivers
