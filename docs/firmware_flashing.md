@@ -42,3 +42,21 @@ component is enabled by this patch.
 The HTTPS component must use `verify_ssl: true` and `follow_redirects: true`
 for GitHub Release binary downloads. A failure to restore UART application
 mode is fatal and requires manual recovery.
+
+## Unified update diagnostics
+
+`EFR32 Firmware Update Status` is the only flash progress/result entity. Its
+state transitions through `Downloading N%`, `Verifying firmware`,
+`Verified: entering bootloader`, `Flashing N%`, `Restoring radio`, and either
+`Completed` or `Failed: <reason>`. Percentages update in 5% increments.
+
+A rejected update request reports `Blocked: <reason>` only when no previous
+terminal outcome is displayed. `Completed` and `Failed: ...` remain visible
+until an accepted new update attempt starts. Reasons distinguish missing
+maintenance authorisation, an active TCP client, network loss, unavailable
+firmware metadata, and transfer or radio recovery errors.
+
+The terminal `Completed` status means the bootloader confirmed installation
+and normal UART mode was restored; ZHA reconnection and subsequent radio
+identification are separate hardware validation gates. This status is not
+persisted across ESP32 restarts.

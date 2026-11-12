@@ -19,6 +19,7 @@
 #include "esphome/core/preferences.h"
 #include "firmware_catalogue.h"
 #include "firmware_downloader.h"
+#include "firmware_flash_diagnostics.h"
 #include "firmware_flash_policy.h"
 #include "firmware_update_monitor.h"
 #include "mode_policy.h"
@@ -94,7 +95,7 @@ class RadioBridge : public Component {
   void check_for_updates_if_due_();
   void publish_update_assessment_();
   void clear_update_entities_();
-  void publish_firmware_update_status_(const std::string& status);
+  void publish_firmware_update_status_();
   void poll_firmware_flash_();
   void finish_firmware_flash_(bool success, const std::string& reason);
 
@@ -106,7 +107,7 @@ class RadioBridge : public Component {
   firmware::DownloadedFirmware flash_image_{};
   text_sensor::TextSensor* firmware_update_status_sensor_{nullptr};
   std::string reported_firmware_update_status_{};
-  unsigned last_flash_progress_{101};
+  firmware::FirmwareFlashDiagnostics flash_diagnostics_{};
   uint32_t flash_source_epoch_{0};
   firmware::FirmwareLoadResult catalogue_result_{};
   http_request::HttpRequestComponent* http_request_{nullptr};
