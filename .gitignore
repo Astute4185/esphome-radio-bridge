@@ -75,5 +75,5 @@ __pycache__/
 *.pyc
 .pioenvs/
 .piolibdeps/
-examples/secrets.yaml
 examples/.esphome/
+.gitignore
