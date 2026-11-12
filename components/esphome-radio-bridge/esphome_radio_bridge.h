@@ -115,7 +115,8 @@ class RadioBridge : public Component {
   text_sensor::TextSensor* catalogue_status_sensor_{nullptr};
   text_sensor::TextSensor* latest_firmware_sensor_{nullptr};
   binary_sensor::BinarySensor* update_available_sensor_{nullptr};
-  std::string catalogue_url_{};
+  std::string effective_catalogue_url_() const;
+  std::string catalogue_url_{};  // Explicit YAML override; empty selects the driver default.
   std::string manifest_override_url_{};
   std::string reported_catalogue_status_{};
   uint32_t catalogue_source_epoch_{0};

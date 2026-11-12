@@ -1,6 +1,6 @@
 # Full version derived from the user's working ESPHome 2026.10.1 config.
-# Driver selects 4-wire normal RTS/CTS and 2-wire Gecko bootloader UART.
-# WARNING: MGM NCP image must support normal-mode RTS/CTS.
+# POC: driver selects 2-wire UART for both normal application and Gecko bootloader.
+# Existing 2-wire NCP firmware works without RTS/CTS. Keep the 4-wire migration for later.
 substitutions:
   deviceid: tubeszb-efr32-mgm210-poe-2023
   devicename: TubesZB Zigbee Coordinator
@@ -40,17 +40,13 @@ ota:
 web_server:
   port: 80
   version: 2
-  auth:
-    type: digest
-    username: !secret web_server_username
-    password: !secret web_server_password
 
 http_request:
   verify_ssl: true
   follow_redirects: true
 
 esphome-radio-bridge:
-  catalogue_url: https://raw.githubusercontent.com/Astute4185/esphome-radio-firmware/main/catalogue.json
+  # catalogue_url is optional: the selected driver supplies its default.
   manifest_override:
     name: Firmware Manifest Override URL
   catalogue_status:

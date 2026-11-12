@@ -13,6 +13,9 @@ namespace esphome::esphome_radio_bridge::drivers {
 class TubesZbMgm210Poe2023Driver final : public BoardDriver {
  public:
   const BoardProfile& profile() const override { return TUBESZB_MGM210_POE_2023; }
+  const char* default_catalogue_url() const override {
+    return "https://raw.githubusercontent.com/Astute4185/esphome-radio-bridge/main/firmware/catalogue.json";
+  }
 
   bool setup() override {
     // Preload deasserted levels before enabling output to reduce control-line glitches.

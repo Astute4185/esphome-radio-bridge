@@ -26,6 +26,13 @@ inline bool is_https_url(const std::string& url) {
   return url.find('#') == std::string::npos;
 }
 
+// YAML takes precedence, then the selected driver's canonical URL. Drivers
+// without firmware support can return nullptr and require an explicit override.
+inline std::string select_catalogue_url(const std::string& configured_url, const char* driver_default) {
+  if (!configured_url.empty()) return configured_url;
+  return driver_default != nullptr ? driver_default : "";
+}
+
 // Resolve catalogue entries without assuming where the catalogue lives in the repository.
 // An unprefixed entry may include directory segments already present in the catalogue URL
 // (e.g. "firmware/..."); the longest complete segment overlap is used once. A leading

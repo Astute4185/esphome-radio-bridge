@@ -64,7 +64,7 @@ def test_new_entities_and_manual_check_are_configured():
         config = yaml.load(path.read_text(), Loader=Loader)["esphome-radio-bridge"]
         for key in ("check_updates", "latest_firmware", "update_available"):
             assert config[key]["name"]
-        assert config["catalogue_url"].startswith("https://")
+        assert "catalogue_url" not in config
         assert config["manifest_override"]["name"]
 
 

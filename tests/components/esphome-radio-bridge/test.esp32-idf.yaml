@@ -21,7 +21,7 @@ http_request:
   follow_redirects: true
 
 esphome-radio-bridge:
-  catalogue_url: https://raw.githubusercontent.com/Astute4185/esphome-radio-firmware/main/catalogue.json
+  # catalogue_url is optional: the selected driver supplies its default.
   manifest_override:
     name: Firmware Manifest Override URL
   catalogue_status:

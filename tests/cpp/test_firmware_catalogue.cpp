@@ -27,6 +27,24 @@ int main() {
   assert(!resolve_manifest_url(catalogue, "firmware\\manifest.json", result));
   assert(!resolve_manifest_url(catalogue, "firmware/manifest.json?token=1", result));
 
+  // Driver-selected default is used only when YAML does not specify an override.
+  assert(select_catalogue_url("", nullptr).empty());
+  assert(select_catalogue_url("", "https://example.com/driver/catalogue.json") ==
+         "https://example.com/driver/catalogue.json");
+  assert(
+      select_catalogue_url("https://example.com/custom.json", "https://example.com/driver/catalogue.json") ==
+      "https://example.com/custom.json");
+  assert(select_catalogue_url("https://example.com/custom.json", nullptr) ==
+         "https://example.com/custom.json");
+
+  // Real driver default + repository-root-relative catalogue path.
+  const std::string driver_default =
+      "https://raw.githubusercontent.com/Astute4185/esphome-radio-bridge/main/firmware/catalogue.json";
+  assert(resolve_manifest_url(driver_default, "firmware/tubeszb_mgm210_poe_2023/zha/manifest.json", result));
+  assert(result ==
+         "https://raw.githubusercontent.com/Astute4185/esphome-radio-bridge/main/firmware/"
+         "tubeszb_mgm210_poe_2023/zha/manifest.json");
+
   // The catalogue may be hosted inside firmware/, while the entry is rooted at
   // the repository's firmware/ directory. Avoid duplicating that segment.
   const std::string nested = "https://raw.githubusercontent.com/owner/repo/main/firmware/catalogue.json";
