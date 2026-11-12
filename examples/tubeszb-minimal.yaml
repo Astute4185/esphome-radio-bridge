@@ -5,6 +5,9 @@ esphome:
 
 packages:
   board_network: !include ../packages/esp32-wrover-lan8720.yaml
+  # Radio flashing requires a dedicated partition. Add the staging package only
+  # when installing the ESP32 partition table by serial/USB flashing.
+  # flash_staging: !include ../packages/radio-flash-staging.yaml
 
 external_components:
   - source:
@@ -24,7 +27,7 @@ ota:
 
 http_request:
   verify_ssl: true
-  follow_redirects: false
+  follow_redirects: true
 
 esphome-radio-bridge:
   catalogue_url: https://raw.githubusercontent.com/Astute4185/esphome-radio-firmware/main/catalogue.json
@@ -38,6 +41,10 @@ esphome-radio-bridge:
     name: EFR32 Check for Updates
   latest_firmware:
     name: EFR32 Latest Firmware
+  flash_firmware:
+    name: EFR32 Update Firmware
+  firmware_update_status:
+    name: EFR32 Firmware Update Status
   update_available:
     name: EFR32 Update Available
   driver: tubeszb_mgm210_poe_2023

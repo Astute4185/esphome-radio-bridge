@@ -1,0 +1,8 @@
+# Optional scratch partition for on-device radio firmware staging.
+# Initial deployment requires USB/serial flashing of the ESP32 partition table.
+esp32:
+  partitions:
+    - name: radio_fw
+      type: data
+      subtype: undefined
+      size: 0x80000  # 512 KiB; must fit the release GBL binary

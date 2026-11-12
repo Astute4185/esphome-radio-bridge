@@ -5,6 +5,7 @@
 #include "efr32_ezsp_probe.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "gecko_xmodem.h"
 #include "tubeszb_mgm210_poe_2023_profile.h"
 
 namespace esphome::esphome_radio_bridge::drivers {
@@ -38,11 +39,13 @@ class TubesZbMgm210Poe2023Driver final : public BoardDriver {
   bool exit_bootloader() override { return this->drive_boot_(false) && this->pulse_reset_(); }
 
   identification::RadioProbe* identification_probe() override { return &probe_; }
+  firmware::FlashProtocol* flash_protocol() override { return &flasher_; }
 
   void shutdown() override { this->drive_boot_(false); }
 
  private:
   identification::Efr32EzspProbe probe_{};
+  firmware::GeckoXmodem flasher_{};
 
   bool drive_(int pin, bool active, bool active_low) {
     const uint32_t level = (active == active_low) ? 0 : 1;

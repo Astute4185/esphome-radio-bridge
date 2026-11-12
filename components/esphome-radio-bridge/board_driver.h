@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "flash_interface.h"
 #include "radio_identification.h"
 #include "uart_mode.h"
 
@@ -53,6 +54,8 @@ class BoardDriver {
   virtual bool exit_bootloader() = 0;
   // Optional driver-owned identification protocol; nullptr means unsupported.
   virtual identification::RadioProbe* identification_probe() { return nullptr; }
+  // Unsupported protocols return nullptr; new chipsets provide their own implementation.
+  virtual firmware::FlashProtocol* flash_protocol() { return nullptr; }
   virtual void shutdown() = 0;
 };
 
