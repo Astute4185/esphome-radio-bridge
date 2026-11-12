@@ -39,7 +39,7 @@ def test_ambiguous_installed_version_uses_unknown_state():
     assert "parse_radio_version(" in monitor
     assert "radio_responding" in monitor
     assert "update_available_sensor_->invalidate_state()" in core
-    assert "latest_firmware_sensor_->invalidate_state()" in core
+    assert 'latest_firmware_sensor_->publish_state("Unknown")' in core
     assert "this->publish_update_assessment_()" in core
 
 
