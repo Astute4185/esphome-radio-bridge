@@ -22,6 +22,7 @@ void RadioBridge::setup() {
   this->publish_bridge_health_(BridgeHealth::STARTING);
   if (manifest_override_text_ != nullptr) manifest_override_text_->restore_override();
   this->publish_catalogue_status_("Idle");
+  this->publish_firmware_update_status_("Idle");
   if (driver_ == nullptr || !drivers::valid_profile(driver_->profile())) {
     this->report_error_("No valid board driver configured");
     return;
@@ -61,6 +62,8 @@ void RadioBridge::dump_config() {
   ESP_LOGCONFIG(TAG, "  TCP port: %u", tcp_port_);
   ESP_LOGCONFIG(TAG, "  Catalogue URL: %s", catalogue_url_.c_str());
   ESP_LOGCONFIG(TAG, "  Firmware channel: %s", board.radio_type);
+  ESP_LOGCONFIG(TAG, "  Flash protocol: %s",
+                driver_->flash_protocol() != nullptr ? "Available" : "Unsupported");
   ESP_LOGCONFIG(TAG, "  UART: UART%d, TX=%d RX=%d RTS=%d CTS=%d", board.uart.port, board.uart.tx,
                 board.uart.rx, board.uart.rts, board.uart.cts);
   ESP_LOGCONFIG(TAG, "  Normal UART: %s", uart_modes::mode_name(board.normal_uart_mode));
@@ -141,7 +144,8 @@ void RadioBridge::poll_radio_identification_() {
 }
 
 void RadioBridge::probe_radio() {
-  if (error_ || !uart_.ready() || mode_ != Mode::NORMAL || armed_ || client_fd_ >= 0 || identifying_) {
+  if (error_ || !uart_.ready() || mode_ != Mode::NORMAL || armed_ || client_fd_ >= 0 || identifying_ ||
+      flash_phase_ != FirmwareFlashPhase::IDLE) {
     ESP_LOGW(TAG, "Radio probe denied: TCP client, maintenance or another probe is active");
     reported_identification_status_ = "Blocked: client or maintenance active";
     if (radio_identification_status_sensor_ != nullptr)
@@ -170,7 +174,7 @@ bool RadioBridge::configure_uart_(Mode new_mode) {
 }
 
 void RadioBridge::radio_reset() {
-  if (driver_ == nullptr || error_ || identifying_ ||
+  if (driver_ == nullptr || error_ || identifying_ || flash_phase_ != FirmwareFlashPhase::IDLE ||
       !allowed(mode_, Command::RESET, armed_, client_fd_ >= 0)) {
     ESP_LOGW(TAG, "Reset denied: TCP client connected or maintenance active");
     return;
@@ -182,7 +186,7 @@ void RadioBridge::radio_reset() {
 }
 
 void RadioBridge::enter_bootloader() {
-  if (driver_ == nullptr || error_ || identifying_ ||
+  if (driver_ == nullptr || error_ || identifying_ || flash_phase_ != FirmwareFlashPhase::IDLE ||
       !allowed(mode_, Command::ENTER_BOOTLOADER, armed_, client_fd_ >= 0) ||
       !driver_->profile().supports_bootloader) {
     ESP_LOGW(TAG, "Bootloader denied: disconnect ZHA and arm maintenance first");
@@ -205,7 +209,7 @@ void RadioBridge::enter_bootloader() {
 }
 
 void RadioBridge::exit_bootloader() {
-  if (driver_ == nullptr || error_ || identifying_ ||
+  if (driver_ == nullptr || error_ || identifying_ || flash_phase_ != FirmwareFlashPhase::IDLE ||
       !allowed(mode_, Command::EXIT_BOOTLOADER, armed_, client_fd_ >= 0)) {
     ESP_LOGW(TAG, "Exit bootloader denied while flashing TCP client is connected");
     return;
@@ -253,8 +257,9 @@ void RadioBridge::publish_bridge_health_(BridgeHealth health) {
 }
 
 void RadioBridge::update_bridge_health_(bool network_ready) {
-  this->publish_bridge_health_(evaluate_bridge_health(uart_.ready(), error_, network_ready, listener_fd_ >= 0,
-                                                      mode_ == Mode::BOOTLOADER, identifying_));
+  this->publish_bridge_health_(evaluate_bridge_health(
+      uart_.ready(), error_, network_ready, listener_fd_ >= 0,
+      mode_ == Mode::BOOTLOADER || flash_phase_ != FirmwareFlashPhase::IDLE, identifying_));
 }
 
 void RadioBridge::record_transport_error_() {
@@ -387,8 +392,13 @@ void RadioBridge::loop() {
       this->publish_catalogue_status_("Idle: source changed; refresh required");
     }
   }
-  this->check_for_updates_if_due_();
+  if (flash_phase_ == FirmwareFlashPhase::IDLE) this->check_for_updates_if_due_();
   if (!uart_.ready() || error_) return;
+  if (flash_phase_ != FirmwareFlashPhase::IDLE) {
+    this->poll_firmware_flash_();
+    this->update_bridge_health_(network::is_connected());
+    return;  // Flashing owns the UART and blocks new TCP client connections.
+  }
   if (identifying_) {
     this->poll_radio_identification_();
     this->update_bridge_health_(network::is_connected());
@@ -531,8 +541,137 @@ void ManifestOverrideText::control(const std::string& value) {
   this->publish_state(value);
 }
 
+void RadioBridge::publish_firmware_update_status_(const std::string& status) {
+  if (reported_firmware_update_status_ == status) return;
+  reported_firmware_update_status_ = status;
+  if (firmware_update_status_sensor_ != nullptr) firmware_update_status_sensor_->publish_state(status);
+}
+
+void RadioBridge::flash_firmware() {
+  if (flash_phase_ != FirmwareFlashPhase::IDLE) {
+    ESP_LOGW(TAG, "Firmware update already in progress");
+    return;  // Preserve the current combined progress/result sensor.
+  }
+  const bool configured = !error_ && uart_.ready() && driver_ != nullptr &&
+                          driver_->profile().supports_bootloader && driver_->flash_protocol() != nullptr &&
+                          http_request_ != nullptr && !catalogue_.busy();
+  const firmware::FlashPreflight state{armed_,
+                                       client_fd_ >= 0,
+                                       identifying_,
+                                       mode_ == Mode::NORMAL,
+                                       network::is_connected(),
+                                       configured,
+                                       flash_phase_ != FirmwareFlashPhase::IDLE || downloader_.busy()};
+  if (!firmware::can_flash(state)) {
+    ESP_LOGW(TAG, "Firmware flash rejected: arm maintenance, disconnect ZHA, and ensure network is ready");
+    this->publish_firmware_update_status_("Blocked: maintenance or bridge not ready");
+    return;
+  }
+  const firmware::FirmwareRelease* release = firmware::select_latest_release(catalogue_result_);
+  if (release == nullptr) {
+    this->publish_firmware_update_status_("Failed: no valid firmware release selected");
+    return;
+  }
+  if (!downloader_.start(http_request_, *release)) {
+    this->publish_firmware_update_status_("Failed: download could not start");
+    return;
+  }
+  // Claim exclusive UART access before the worker starts; no ZHA client may connect.
+  this->close_listener_();
+  uart_to_tcp_.clear();
+  tcp_to_uart_.clear();
+  flash_source_epoch_ = catalogue_source_epoch_;
+  flash_phase_ = FirmwareFlashPhase::DOWNLOADING;
+  last_flash_progress_ = 0;
+  this->publish_firmware_update_status_("Downloading 0%");
+  this->update_bridge_health_(network::is_connected());
+}
+
+void RadioBridge::poll_firmware_flash_() {
+  if (flash_phase_ == FirmwareFlashPhase::DOWNLOADING) {
+    const unsigned progress = downloader_.progress_percent();
+    if (progress > last_flash_progress_ && (progress >= last_flash_progress_ + 5 || progress == 100)) {
+      last_flash_progress_ = progress;
+      this->publish_firmware_update_status_("Downloading " + std::to_string(progress) + "%");
+    }
+    firmware::DownloadedFirmware ready;
+    if (!downloader_.collect(ready)) return;
+    if (!ready.ok) {
+      this->finish_firmware_flash_(false, ready.message);
+      return;
+    }
+    if (!armed_ || client_fd_ >= 0 || !network::is_connected() ||
+        flash_source_epoch_ != catalogue_source_epoch_) {
+      this->finish_firmware_flash_(false, "maintenance, network or manifest source changed");
+      return;
+    }
+    flash_image_ = std::move(ready);
+    this->publish_firmware_update_status_("Verified: entering bootloader");
+    if (!this->configure_uart_(Mode::BOOTLOADER)) {
+      this->finish_firmware_flash_(false, "bootloader UART setup failed");
+      return;
+    }
+    if (!driver_->enter_bootloader()) {
+      this->finish_firmware_flash_(false, "bootloader entry failed");
+      return;
+    }
+    auto* protocol = driver_->flash_protocol();
+    if (protocol == nullptr || !protocol->begin(flash_image_.image.get(), millis())) {
+      this->finish_firmware_flash_(false, "flash protocol could not start");
+      return;
+    }
+    flash_phase_ = FirmwareFlashPhase::FLASHING;
+    last_flash_progress_ = 0;
+    this->publish_firmware_update_status_("Flashing 0%");
+    return;
+  }
+  if (flash_phase_ != FirmwareFlashPhase::FLASHING) return;
+  auto* protocol = driver_->flash_protocol();
+  if (protocol == nullptr) {
+    this->finish_firmware_flash_(false, "flash protocol unavailable");
+    return;
+  }
+  protocol->poll(uart_, millis());
+  const unsigned progress = protocol->percent();
+  if (progress > last_flash_progress_ && (progress >= last_flash_progress_ + 5 || progress == 100)) {
+    last_flash_progress_ = progress;
+    this->publish_firmware_update_status_("Flashing " + std::to_string(progress) + "%");
+  }
+  if (protocol->succeeded()) {
+    this->finish_firmware_flash_(true, "Completed");
+  } else if (protocol->failed()) {
+    this->finish_firmware_flash_(false, protocol->error());
+  }
+}
+
+void RadioBridge::finish_firmware_flash_(bool success, const std::string& reason) {
+  if (flash_phase_ == FirmwareFlashPhase::FLASHING && driver_->flash_protocol() != nullptr &&
+      driver_->flash_protocol()->running())
+    driver_->flash_protocol()->cancel();
+  const bool in_bootloader = mode_ == Mode::BOOTLOADER;
+  flash_phase_ = FirmwareFlashPhase::IDLE;
+  flash_image_ = {};  // Release access to the verified flash-staging image.
+  if (in_bootloader) {
+    if (!driver_->exit_bootloader() || !this->configure_uart_(Mode::NORMAL)) {
+      this->publish_firmware_update_status_("Failed: radio recovery failed");
+      this->report_error_("Radio recovery failed after firmware update");
+      return;
+    }
+  }
+  armed_ = false;
+  if (armed_switch_ != nullptr) armed_switch_->turn_off();
+  this->publish_firmware_update_status_(success ? "Completed" : "Failed: " + reason);
+  // New firmware may identify differently. Refresh the driver-owned installed version.
+  if (in_bootloader) this->begin_radio_identification_();
+  listener_retry_pending_ = false;
+  this->update_bridge_health_(network::is_connected());
+}
+
 void RadioBridge::on_shutdown() {
   if (active_probe_ != nullptr && identifying_) active_probe_->cancel();
+  if (flash_phase_ == FirmwareFlashPhase::FLASHING && driver_ != nullptr &&
+      driver_->flash_protocol() != nullptr)
+    driver_->flash_protocol()->cancel();
   identifying_ = false;
   this->publish_bridge_health_(BridgeHealth::STOPPED);
   this->close_client_(DisconnectReason::SHUTDOWN);

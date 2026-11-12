@@ -18,6 +18,8 @@
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 #include "firmware_catalogue.h"
+#include "firmware_downloader.h"
+#include "firmware_flash_policy.h"
 #include "firmware_update_monitor.h"
 #include "mode_policy.h"
 
@@ -40,6 +42,9 @@ class RadioBridge : public Component {
   void set_manifest_override_text(ManifestOverrideText* value) { manifest_override_text_ = value; }
   void set_catalogue_status_sensor(text_sensor::TextSensor* value) { catalogue_status_sensor_ = value; }
   void set_latest_firmware_sensor(text_sensor::TextSensor* value) { latest_firmware_sensor_ = value; }
+  void set_firmware_update_status_sensor(text_sensor::TextSensor* value) {
+    firmware_update_status_sensor_ = value;
+  }
   void set_update_available_sensor(binary_sensor::BinarySensor* value) { update_available_sensor_ = value; }
   bool set_manifest_override_url(const std::string& url);
   void refresh_catalogue();
@@ -63,6 +68,7 @@ class RadioBridge : public Component {
   bool is_armed() const { return armed_; }
   void radio_reset();
   void probe_radio();
+  void flash_firmware();
   void enter_bootloader();
   void exit_bootloader();
 
@@ -88,9 +94,20 @@ class RadioBridge : public Component {
   void check_for_updates_if_due_();
   void publish_update_assessment_();
   void clear_update_entities_();
+  void publish_firmware_update_status_(const std::string& status);
+  void poll_firmware_flash_();
+  void finish_firmware_flash_(bool success, const std::string& reason);
 
   std::unique_ptr<drivers::BoardDriver> driver_;
   firmware::FirmwareCatalogue catalogue_{};
+  firmware::FirmwareDownloader downloader_{};
+  enum class FirmwareFlashPhase : uint8_t { IDLE, DOWNLOADING, FLASHING };
+  FirmwareFlashPhase flash_phase_{FirmwareFlashPhase::IDLE};
+  firmware::DownloadedFirmware flash_image_{};
+  text_sensor::TextSensor* firmware_update_status_sensor_{nullptr};
+  std::string reported_firmware_update_status_{};
+  unsigned last_flash_progress_{101};
+  uint32_t flash_source_epoch_{0};
   firmware::FirmwareLoadResult catalogue_result_{};
   http_request::HttpRequestComponent* http_request_{nullptr};
   ManifestOverrideText* manifest_override_text_{nullptr};
@@ -139,6 +156,15 @@ class RadioBridge : public Component {
   text_sensor::TextSensor* installed_firmware_sensor_{nullptr};
   text_sensor::TextSensor* radio_identification_status_sensor_{nullptr};
   switch_::Switch* armed_switch_{nullptr};
+};
+
+class FlashFirmwareButton : public button::Button {
+ public:
+  explicit FlashFirmwareButton(RadioBridge* parent) : parent_(parent) {}
+
+ protected:
+  void press_action() override { parent_->flash_firmware(); }
+  RadioBridge* parent_;
 };
 
 class CheckUpdatesButton : public button::Button {

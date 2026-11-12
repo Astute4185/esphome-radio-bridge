@@ -55,6 +55,8 @@ CONF_REFRESH_CATALOGUE = "refresh_catalogue"
 CONF_CHECK_UPDATES = "check_updates"
 CONF_LATEST_FIRMWARE = "latest_firmware"
 CONF_UPDATE_AVAILABLE = "update_available"
+CONF_FLASH_FIRMWARE = "flash_firmware"
+CONF_FIRMWARE_UPDATE_STATUS = "firmware_update_status"
 
 
 def secure_url(value):
@@ -71,6 +73,7 @@ RadioResetButton = ns.class_("RadioResetButton", button.Button)
 ProbeRadioButton = ns.class_("ProbeRadioButton", button.Button)
 RefreshCatalogueButton = ns.class_("RefreshCatalogueButton", button.Button)
 CheckUpdatesButton = ns.class_("CheckUpdatesButton", button.Button)
+FlashFirmwareButton = ns.class_("FlashFirmwareButton", button.Button)
 ManifestOverrideText = ns.class_("ManifestOverrideText", text.Text)
 EnterBootloaderButton = ns.class_("EnterBootloaderButton", button.Button)
 ExitBootloaderButton = ns.class_("ExitBootloaderButton", button.Button)
@@ -97,6 +100,12 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_LATEST_FIRMWARE): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_FLASH_FIRMWARE): button.button_schema(
+                FlashFirmwareButton, entity_category=ENTITY_CATEGORY_CONFIG
+            ),
+            cv.Optional(CONF_FIRMWARE_UPDATE_STATUS): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
             ),
             cv.Optional(CONF_UPDATE_AVAILABLE): binary_sensor.binary_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
@@ -183,6 +192,11 @@ async def to_code(config):
     if conf := config.get(CONF_LATEST_FIRMWARE):
         entity = await text_sensor.new_text_sensor(conf)
         cg.add(var.set_latest_firmware_sensor(entity))
+    if conf := config.get(CONF_FLASH_FIRMWARE):
+        await button.new_button(conf, var)
+    if conf := config.get(CONF_FIRMWARE_UPDATE_STATUS):
+        entity = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_firmware_update_status_sensor(entity))
     if conf := config.get(CONF_UPDATE_AVAILABLE):
         entity = await binary_sensor.new_binary_sensor(conf)
         cg.add(var.set_update_available_sensor(entity))
