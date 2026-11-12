@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "board": "tubeszb_mgm210_poe_2023",
+  "radio_type": "zha",
+  "latest": "0.0",
+  "versions": [
+    {
+      "firmware_version": "0.0",
+      "radio_version": "0.0.0",
+      "release_type": "release",
+      "sha256": "<actual SHA-256 hash>",
+      "file": "https://github.com/OWNER/esphome-radio-firmware/releases/download/v1.1/firmware-1.1.gbl"
+    }
+]
+}

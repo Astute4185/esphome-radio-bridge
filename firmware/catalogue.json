@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "boards": {
+    "tubeszb_mgm210_poe_2023": {
+      "zha": "firmware/tubeszb_mgm210_poe_2023/zha/manifest.json"
+    }
+  }
+}
