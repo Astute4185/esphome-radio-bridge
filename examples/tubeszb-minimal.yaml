@@ -39,5 +39,11 @@ esphome-radio-bridge:
     name: Radio Bridge Status
   connected:
     name: Zigbee TCP Client Connected
+  installed_firmware:
+    name: EFR32 Installed Firmware
+  radio_identification_status:
+    name: EFR32 Identification Status
+  probe_radio:
+    name: EFR32 Probe Firmware
   mode:
     name: EFR32 Operating Mode

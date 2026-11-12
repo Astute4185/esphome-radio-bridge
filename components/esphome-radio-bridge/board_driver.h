@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "radio_identification.h"
 #include "uart_mode.h"
 
 namespace esphome::esphome_radio_bridge::drivers {
@@ -49,6 +50,8 @@ class BoardDriver {
   virtual bool reset_radio() = 0;
   virtual bool enter_bootloader() = 0;
   virtual bool exit_bootloader() = 0;
+  // Optional driver-owned identification protocol; nullptr means unsupported.
+  virtual identification::RadioProbe* identification_probe() { return nullptr; }
   virtual void shutdown() = 0;
 };
 

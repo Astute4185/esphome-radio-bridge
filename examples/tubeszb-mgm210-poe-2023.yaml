@@ -60,6 +60,12 @@ esphome-radio-bridge:
     id: zigbee_tcp_connected
   disconnects:
     name: Zigbee TCP Disconnects
+  installed_firmware:
+    name: EFR32 Installed Firmware
+  radio_identification_status:
+    name: EFR32 Identification Status
+  probe_radio:
+    name: EFR32 Probe Firmware
   mode:
     name: EFR32 Operating Mode
   flash_armed:

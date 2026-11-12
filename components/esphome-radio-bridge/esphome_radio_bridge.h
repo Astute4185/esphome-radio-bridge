@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "board_factory.h"
 #include "bridge_health.h"
@@ -37,11 +38,16 @@ class RadioBridge : public Component {
   void set_transport_errors_sensor(sensor::Sensor* value) { transport_errors_sensor_ = value; }
   void set_disconnects_sensor(sensor::Sensor* value) { disconnects_sensor_ = value; }
   void set_mode_sensor(text_sensor::TextSensor* value) { mode_sensor_ = value; }
+  void set_installed_firmware_sensor(text_sensor::TextSensor* value) { installed_firmware_sensor_ = value; }
+  void set_radio_identification_status_sensor(text_sensor::TextSensor* value) {
+    radio_identification_status_sensor_ = value;
+  }
   void set_armed_switch(switch_::Switch* value) { armed_switch_ = value; }
 
   void set_armed(bool armed) { armed_ = armed; }
   bool is_armed() const { return armed_; }
   void radio_reset();
+  void probe_radio();
   void enter_bootloader();
   void exit_bootloader();
 
@@ -60,6 +66,9 @@ class RadioBridge : public Component {
   void publish_bridge_health_(BridgeHealth health);
   void update_bridge_health_(bool network_ready);
   void record_transport_error_();
+  void begin_radio_identification_();
+  void poll_radio_identification_();
+  void publish_radio_identity_(const identification::RadioIdentity& identity);
 
   std::unique_ptr<drivers::BoardDriver> driver_;
   int listener_fd_{-1};
@@ -77,6 +86,10 @@ class RadioBridge : public Component {
   const char* last_failure_{nullptr};
   Mode mode_{Mode::NORMAL};
   bool armed_{false};
+  bool identifying_{false};
+  identification::RadioProbe* active_probe_{nullptr};
+  std::string reported_firmware_{};
+  std::string reported_identification_status_{};
   uart_modes::EspIdfUartBus uart_{};
   bool error_{false};
   ByteRing<4096> uart_to_tcp_{};
@@ -88,7 +101,18 @@ class RadioBridge : public Component {
   sensor::Sensor* transport_errors_sensor_{nullptr};
   sensor::Sensor* disconnects_sensor_{nullptr};
   text_sensor::TextSensor* mode_sensor_{nullptr};
+  text_sensor::TextSensor* installed_firmware_sensor_{nullptr};
+  text_sensor::TextSensor* radio_identification_status_sensor_{nullptr};
   switch_::Switch* armed_switch_{nullptr};
+};
+
+class ProbeRadioButton : public button::Button {
+ public:
+  explicit ProbeRadioButton(RadioBridge* parent) : parent_(parent) {}
+
+ protected:
+  void press_action() override { parent_->probe_radio(); }
+  RadioBridge* parent_;
 };
 
 class RadioResetButton : public button::Button {

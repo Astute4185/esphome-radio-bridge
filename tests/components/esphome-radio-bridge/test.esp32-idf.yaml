@@ -30,6 +30,12 @@ esphome-radio-bridge:
     name: TCP Connected
   disconnects:
     name: TCP Disconnects
+  installed_firmware:
+    name: EFR32 Installed Firmware
+  radio_identification_status:
+    name: EFR32 Identification Status
+  probe_radio:
+    name: EFR32 Probe Firmware
   mode:
     name: Radio Mode
   flash_armed:

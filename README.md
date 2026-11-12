@@ -207,3 +207,20 @@ bootloaders just because they connect over the same TCP bridge.
 - Keep a recoverable firmware/bootloader route available during development.
 
 See [Architecture](docs/architecture.md) for the acceptance-test matrix.
+
+### Driver-owned radio identification
+
+When the UART is initialised in normal application mode, the bridge reserves
+exclusive access while the selected driver attempts identification. The TCP
+listener becomes available only after the probe finishes or times out. The
+TubesZB MGM210 driver uses ASH/EZSP; future drivers may implement other
+protocols or report unsupported. Probe failure is diagnostic and does not
+block TCP bridging.
+
+Entities: `EFR32 Installed Firmware` (text sensor), `EFR32 Identification
+Status` (text sensor) and `EFR32 Probe Firmware` (button). Manual probes are
+blocked while a TCP client is connected or maintenance is active. The NCP is
+reset after probing so ZHA always starts with a clean radio session.
+
+This feature requires hardware verification against the target MGM210
+firmware, especially with four-wire RTS/CTS.

@@ -25,12 +25,12 @@ See [UART modes](uart_modes.md) for strategy examples and transition details.
 
 1. Obtain the actual hardware schematic and verify TX/RX. If either mode
    uses four-wire, confirm RTS/CTS crossings. Never reuse mock GPIO mappings.
-2. Create `components/serial_radio_gateway/drivers/<model>_profile.h` with
+2. Create `components/esphome-radio-bridge/<model>_profile.h` with
    the immutable `BoardProfile`, and `static_assert(valid_profile(PROFILE))`.
-3. Implement `drivers::BoardDriver` in `drivers/<model>.h`. The existing
+3. Implement `drivers::BoardDriver` in `<model>.h`. The existing
    `tubeszb_mgm210_poe_2023.h` illustrates active-low reset/bootloader GPIOs;
    other radio controllers may use completely different sequences.
-4. Add the enum value and factory case in `drivers/board_factory.h`.
+4. Add the enum value and factory case in `board_factory.h`.
 5. Select the normal and bootloader UART strategies in the profile. Add the
    same driver ID in the Python `BOARD_DRIVERS` tuple in `__init__.py`.
    Keep enum names and the uppercased driver IDs consistent; codegen maps the
@@ -45,7 +45,7 @@ See [UART modes](uart_modes.md) for strategy examples and transition details.
 ## Driver selected from YAML
 
 ```yaml
-serial_radio_gateway:
+esphome-radio-bridge:
   driver: tubeszb_mgm210_poe_2023
   tcp_port: 6638
 ```
@@ -65,7 +65,7 @@ create a driver `my_radio_rev_b` (with verified wiring) and then select it:
 packages:
   ethernet: !include ../packages/esp32-wrover-lan8720.yaml
 
-serial_radio_gateway:
+esphome-radio-bridge:
   driver: my_radio_rev_b  # example ID, NOT implemented yet
   tcp_port: 6638
 ```
@@ -74,5 +74,22 @@ Until that driver is implemented and tested, this configuration will be rejected
 by ESPHome config validation. This is intentional: we will not silently select
 or synthesize GPIO mappings for unknown boards.
 
-The generic TCP gateway does not probe the firmware or own the flashing format.
-Those are explicit future protocol-level extensions, scoped by driver capability.
+## Identification on normal-mode UART startup
+
+The generic bridge always enters the driver identification phase after initial
+UART setup, after a supported radio reset, and after returning from bootloader
+mode. It does not understand radio protocol bytes.
+
+A driver may override `identification_probe()` to return a persistent
+`identification::RadioProbe` instance, or return `nullptr` (default) when the
+radio cannot be identified. The probe uses the `identification::ProbeUart`
+interface and must never block the ESPHome main loop. The bridge reserves the
+UART for the probe before enabling the TCP listener, then returns it to clients.
+
+The EFR32 driver implements ASH/EZSP probing in `efr32_ezsp_probe.h`.
+Failures and timeouts are diagnostic and **must not stop TCP bridging**. A
+manual probe is refused while a TCP client is connected or maintenance is
+active. This avoids interrupting ZHA. The driver owns the wire protocol;
+future drivers can use a different protocol without changing the bridge.
+
+Firmware flashing remains a separate, board-gated capability.
