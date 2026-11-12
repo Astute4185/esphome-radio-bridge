@@ -15,6 +15,7 @@ inline constexpr BoardProfile TUBESZB_MGM210_POE_2023{
     115200,
     true,
     FirmwareProtocol::GECKO_XMODEM_CRC,
+    "zha",
 };
 static_assert(valid_profile(TUBESZB_MGM210_POE_2023), "Invalid TubesZB board mapping");
 }  // namespace esphome::esphome_radio_bridge::drivers

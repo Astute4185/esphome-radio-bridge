@@ -6,6 +6,7 @@
 #include <cerrno>
 #include <cstring>
 #include <string>
+#include <utility>
 
 #include "esphome/components/network/util.h"
 #include "esphome/core/hal.h"
@@ -19,6 +20,8 @@ static const char* const TAG = "esphome_radio_bridge";
 
 void RadioBridge::setup() {
   this->publish_bridge_health_(BridgeHealth::STARTING);
+  if (manifest_override_text_ != nullptr) manifest_override_text_->restore_override();
+  this->publish_catalogue_status_("Idle");
   if (driver_ == nullptr || !drivers::valid_profile(driver_->profile())) {
     this->report_error_("No valid board driver configured");
     return;
@@ -56,6 +59,8 @@ void RadioBridge::dump_config() {
   const auto& board = driver_->profile();
   ESP_LOGCONFIG(TAG, "  Board driver: %s", board.id);
   ESP_LOGCONFIG(TAG, "  TCP port: %u", tcp_port_);
+  ESP_LOGCONFIG(TAG, "  Catalogue URL: %s", catalogue_url_.c_str());
+  ESP_LOGCONFIG(TAG, "  Firmware channel: %s", board.radio_type);
   ESP_LOGCONFIG(TAG, "  UART: UART%d, TX=%d RX=%d RTS=%d CTS=%d", board.uart.port, board.uart.tx,
                 board.uart.rx, board.uart.rts, board.uart.cts);
   ESP_LOGCONFIG(TAG, "  Normal UART: %s", uart_modes::mode_name(board.normal_uart_mode));
@@ -364,6 +369,16 @@ void RadioBridge::send_tcp_() {
 }
 
 void RadioBridge::loop() {
+  firmware::FirmwareLoadResult completed;
+  if (catalogue_.collect(completed)) {
+    if (catalogue_source_epoch_ == catalogue_request_epoch_) {
+      catalogue_result_ = std::move(completed);
+      this->publish_catalogue_status_(catalogue_result_.ok ? catalogue_result_.message
+                                                           : "Error: " + catalogue_result_.message);
+    } else {
+      this->publish_catalogue_status_("Idle: source changed; refresh required");
+    }
+  }
   if (!uart_.ready() || error_) return;
   if (identifying_) {
     this->poll_radio_identification_();
@@ -396,6 +411,68 @@ void RadioBridge::loop() {
     this->close_client_(DisconnectReason::MAINTENANCE);
     this->exit_bootloader();
   }
+}
+
+void RadioBridge::publish_catalogue_status_(const std::string& status) {
+  if (reported_catalogue_status_ == status) return;
+  reported_catalogue_status_ = status;
+  if (catalogue_status_sensor_ != nullptr) catalogue_status_sensor_->publish_state(status);
+}
+
+bool RadioBridge::set_manifest_override_url(const std::string& url) {
+  if (!url.empty() && !firmware::is_https_url(url)) return false;
+  if (manifest_override_url_ == url) return true;
+  manifest_override_url_ = url;
+  ++catalogue_source_epoch_;
+  catalogue_result_ = {};
+  this->publish_catalogue_status_("Idle: source changed; refresh required");
+  return true;
+}
+
+void RadioBridge::refresh_catalogue() {
+  if (driver_ == nullptr || http_request_ == nullptr ||
+      (catalogue_url_.empty() && manifest_override_url_.empty())) {
+    this->publish_catalogue_status_("Error: catalogue not configured");
+    return;
+  }
+  if (catalogue_.busy()) {
+    this->publish_catalogue_status_("Loading");
+    return;
+  }
+  if (!network::is_connected()) {
+    this->publish_catalogue_status_("Error: network offline");
+    return;
+  }
+  const auto& board = driver_->profile();
+  if (!catalogue_.start(http_request_, catalogue_url_, manifest_override_url_, board.id, board.radio_type)) {
+    this->publish_catalogue_status_("Error: unable to start catalogue request");
+    return;
+  }
+  catalogue_request_epoch_ = catalogue_source_epoch_;
+  this->publish_catalogue_status_("Loading");
+}
+
+void ManifestOverrideText::restore_override() {
+  pref_ = this->make_entity_preference<SavedUrl>(1);
+  SavedUrl saved{};
+  if (pref_.load(&saved) && std::memchr(saved.data, '\0', sizeof(saved.data)) != nullptr &&
+      parent_->set_manifest_override_url(saved.data)) {
+    this->publish_state(saved.data);
+  } else {
+    parent_->set_manifest_override_url("");
+    this->publish_state("");
+  }
+}
+
+void ManifestOverrideText::control(const std::string& value) {
+  if (value.size() >= sizeof(SavedUrl::data) || !parent_->set_manifest_override_url(value)) {
+    ESP_LOGW(TAG, "Invalid firmware manifest override: HTTPS URL required (max 255 chars)");
+    return;
+  }
+  SavedUrl saved{};
+  std::memcpy(saved.data, value.c_str(), value.size());
+  if (!pref_.save(&saved)) ESP_LOGW(TAG, "Unable to persist manifest URL override");
+  this->publish_state(value);
 }
 
 void RadioBridge::on_shutdown() {
