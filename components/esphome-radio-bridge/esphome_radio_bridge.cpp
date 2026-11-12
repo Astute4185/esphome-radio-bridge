@@ -194,7 +194,7 @@ void RadioBridge::enter_bootloader() {
   }
   if (!this->configure_uart_(Mode::BOOTLOADER)) {
     if (!this->configure_uart_(Mode::NORMAL))
-      this->report_error_("RTS/CTS recovery failed after bootloader UART error");
+      this->report_error_("UART mode recovery failed after bootloader UART error");
     return;
   }
   if (!driver_->enter_bootloader()) {
@@ -215,14 +215,14 @@ void RadioBridge::exit_bootloader() {
     return;
   }
   if (!driver_->exit_bootloader() || !this->configure_uart_(Mode::NORMAL)) {
-    this->report_error_("Radio application reset or RTS/CTS restoration failed");
+    this->report_error_("Radio application reset or UART mode restoration failed");
     return;
   }
   armed_ = false;
   if (armed_switch_ != nullptr) armed_switch_->turn_off();
   this->begin_radio_identification_();
   this->update_bridge_health_(network::is_connected());
-  ESP_LOGI(TAG, "Radio application reset and RTS/CTS restored");
+  ESP_LOGI(TAG, "Radio application reset and normal UART mode restored");
 }
 
 void RadioBridge::publish_mode_() {

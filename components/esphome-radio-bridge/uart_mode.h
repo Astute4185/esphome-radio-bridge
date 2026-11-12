@@ -33,8 +33,11 @@ constexpr bool valid_uart_pinout(const UartPinout& p, UartModeId normal, UartMod
   if (!valid_uart_mode(normal) || !valid_uart_mode(boot) || p.port > 2 || p.tx < 0 || p.tx > 33 || p.rx < 0 ||
       p.rx > 39 || p.tx == p.rx)
     return false;
-  if (!requires_rts_cts(normal) && !requires_rts_cts(boot))
-    return p.rts == -1 && p.cts == -1 && p.rts_threshold == 0;
+  // A two-wire profile may retain valid, unused RTS/CTS pin mapping for
+  // hardware that supports a future four-wire firmware migration.
+  if (!requires_rts_cts(normal) && !requires_rts_cts(boot) && p.rts == -1 && p.cts == -1 &&
+      p.rts_threshold == 0)
+    return true;
   if (p.rts < 0 || p.rts > 33 || p.cts < 0 || p.cts > 39 || p.rts_threshold == 0 || p.rts_threshold > 127)
     return false;
   return p.tx != p.rts && p.tx != p.cts && p.rx != p.rts && p.rx != p.cts && p.rts != p.cts;

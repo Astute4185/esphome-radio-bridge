@@ -70,7 +70,7 @@ static void test_profile() {
   static_assert(mgm.uart.port == 1 && mgm.uart.tx == 4 && mgm.uart.rx == 36);
   static_assert(mgm.uart.rts == 2 && mgm.uart.cts == 13);
   static_assert(mgm.reset_gpio == 5 && mgm.boot_gpio == 16);
-  static_assert(mgm.normal_uart_mode == UartModeId::FOUR_WIRE);
+  static_assert(mgm.normal_uart_mode == UartModeId::TWO_WIRE);
   static_assert(mgm.bootloader_uart_mode == UartModeId::TWO_WIRE);
   static_assert(mgm.normal_baud == mgm.bootloader_baud);
   static_assert(mgm.firmware_protocol == FirmwareProtocol::GECKO_XMODEM_CRC);
