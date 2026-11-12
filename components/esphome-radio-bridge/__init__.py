@@ -52,6 +52,9 @@ CONF_HTTP_REQUEST_ID = "http_request_id"
 CONF_MANIFEST_OVERRIDE = "manifest_override"
 CONF_CATALOGUE_STATUS = "catalogue_status"
 CONF_REFRESH_CATALOGUE = "refresh_catalogue"
+CONF_CHECK_UPDATES = "check_updates"
+CONF_LATEST_FIRMWARE = "latest_firmware"
+CONF_UPDATE_AVAILABLE = "update_available"
 
 
 def secure_url(value):
@@ -67,6 +70,7 @@ BoardModel = ns.namespace("drivers").enum("BoardModel", is_class=True)
 RadioResetButton = ns.class_("RadioResetButton", button.Button)
 ProbeRadioButton = ns.class_("ProbeRadioButton", button.Button)
 RefreshCatalogueButton = ns.class_("RefreshCatalogueButton", button.Button)
+CheckUpdatesButton = ns.class_("CheckUpdatesButton", button.Button)
 ManifestOverrideText = ns.class_("ManifestOverrideText", text.Text)
 EnterBootloaderButton = ns.class_("EnterBootloaderButton", button.Button)
 ExitBootloaderButton = ns.class_("ExitBootloaderButton", button.Button)
@@ -87,6 +91,15 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_REFRESH_CATALOGUE): button.button_schema(
                 RefreshCatalogueButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_CHECK_UPDATES): button.button_schema(
+                CheckUpdatesButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_LATEST_FIRMWARE): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_UPDATE_AVAILABLE): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_TCP_PORT, default=6638): cv.port,
             cv.Optional(CONF_MAINTENANCE_TIMEOUT, default="10min"): cv.positive_time_period_milliseconds,
@@ -165,6 +178,14 @@ async def to_code(config):
         cg.add(var.set_catalogue_status_sensor(status))
     if conf := config.get(CONF_REFRESH_CATALOGUE):
         await button.new_button(conf, var)
+    if conf := config.get(CONF_CHECK_UPDATES):
+        await button.new_button(conf, var)
+    if conf := config.get(CONF_LATEST_FIRMWARE):
+        entity = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_latest_firmware_sensor(entity))
+    if conf := config.get(CONF_UPDATE_AVAILABLE):
+        entity = await binary_sensor.new_binary_sensor(conf)
+        cg.add(var.set_update_available_sensor(entity))
     if conf := config.get(CONF_BRIDGE_READY):
         entity = await binary_sensor.new_binary_sensor(conf)
         cg.add(var.set_bridge_ready_sensor(entity))

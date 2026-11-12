@@ -18,6 +18,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 #include "firmware_catalogue.h"
+#include "firmware_update_monitor.h"
 #include "mode_policy.h"
 
 namespace esphome::esphome_radio_bridge {
@@ -38,6 +39,8 @@ class RadioBridge : public Component {
   void set_catalogue_url(const std::string& url) { catalogue_url_ = url; }
   void set_manifest_override_text(ManifestOverrideText* value) { manifest_override_text_ = value; }
   void set_catalogue_status_sensor(text_sensor::TextSensor* value) { catalogue_status_sensor_ = value; }
+  void set_latest_firmware_sensor(text_sensor::TextSensor* value) { latest_firmware_sensor_ = value; }
+  void set_update_available_sensor(binary_sensor::BinarySensor* value) { update_available_sensor_ = value; }
   bool set_manifest_override_url(const std::string& url);
   void refresh_catalogue();
   void set_maintenance_timeout(uint32_t timeout_ms) { maintenance_timeout_ms_ = timeout_ms; }
@@ -82,6 +85,9 @@ class RadioBridge : public Component {
   void poll_radio_identification_();
   void publish_radio_identity_(const identification::RadioIdentity& identity);
   void publish_catalogue_status_(const std::string& status);
+  void check_for_updates_if_due_();
+  void publish_update_assessment_();
+  void clear_update_entities_();
 
   std::unique_ptr<drivers::BoardDriver> driver_;
   firmware::FirmwareCatalogue catalogue_{};
@@ -89,11 +95,17 @@ class RadioBridge : public Component {
   http_request::HttpRequestComponent* http_request_{nullptr};
   ManifestOverrideText* manifest_override_text_{nullptr};
   text_sensor::TextSensor* catalogue_status_sensor_{nullptr};
+  text_sensor::TextSensor* latest_firmware_sensor_{nullptr};
+  binary_sensor::BinarySensor* update_available_sensor_{nullptr};
   std::string catalogue_url_{};
   std::string manifest_override_url_{};
   std::string reported_catalogue_status_{};
   uint32_t catalogue_source_epoch_{0};
   uint32_t catalogue_request_epoch_{0};
+  uint32_t last_update_check_ms_{0};
+  bool has_update_check_attempt_{false};
+  bool last_update_check_succeeded_{false};
+  bool installed_radio_responding_{false};
   int listener_fd_{-1};
   int client_fd_{-1};
   uint16_t tcp_port_{6638};
@@ -127,6 +139,15 @@ class RadioBridge : public Component {
   text_sensor::TextSensor* installed_firmware_sensor_{nullptr};
   text_sensor::TextSensor* radio_identification_status_sensor_{nullptr};
   switch_::Switch* armed_switch_{nullptr};
+};
+
+class CheckUpdatesButton : public button::Button {
+ public:
+  explicit CheckUpdatesButton(RadioBridge* parent) : parent_(parent) {}
+
+ protected:
+  void press_action() override { parent_->refresh_catalogue(); }
+  RadioBridge* parent_;
 };
 
 class RefreshCatalogueButton : public button::Button {
