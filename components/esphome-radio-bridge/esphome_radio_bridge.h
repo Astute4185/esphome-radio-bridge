@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "board_factory.h"
+#include "bridge_health.h"
 #include "byte_ring.h"
 #include "esp_idf_uart_bus.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
@@ -28,6 +29,12 @@ class RadioBridge : public Component {
   void set_tcp_port(uint16_t port) { tcp_port_ = port; }
   void set_maintenance_timeout(uint32_t timeout_ms) { maintenance_timeout_ms_ = timeout_ms; }
   void set_connected_sensor(binary_sensor::BinarySensor* value) { connected_sensor_ = value; }
+  void set_bridge_ready_sensor(binary_sensor::BinarySensor* value) { bridge_ready_sensor_ = value; }
+  void set_bridge_status_sensor(text_sensor::TextSensor* value) { bridge_status_sensor_ = value; }
+  void set_last_disconnect_reason_sensor(text_sensor::TextSensor* value) {
+    last_disconnect_reason_sensor_ = value;
+  }
+  void set_transport_errors_sensor(sensor::Sensor* value) { transport_errors_sensor_ = value; }
   void set_disconnects_sensor(sensor::Sensor* value) { disconnects_sensor_ = value; }
   void set_mode_sensor(text_sensor::TextSensor* value) { mode_sensor_ = value; }
   void set_armed_switch(switch_::Switch* value) { armed_switch_ = value; }
@@ -42,7 +49,7 @@ class RadioBridge : public Component {
   bool configure_uart_(Mode new_mode);
   void open_listener_();
   void close_listener_();
-  void close_client_();
+  void close_client_(DisconnectReason reason);
   void accept_client_();
   void bridge_uart_();
   void bridge_tcp_();
@@ -50,6 +57,9 @@ class RadioBridge : public Component {
   void publish_mode_();
   void mark_maintenance_activity_();
   void report_error_(const char* message);
+  void publish_bridge_health_(BridgeHealth health);
+  void update_bridge_health_(bool network_ready);
+  void record_transport_error_();
 
   std::unique_ptr<drivers::BoardDriver> driver_;
   int listener_fd_{-1};
@@ -58,6 +68,13 @@ class RadioBridge : public Component {
   uint32_t maintenance_timeout_ms_{600000};
   uint32_t last_maintenance_activity_{0};
   uint32_t disconnects_{0};
+  uint32_t transport_errors_{0};
+  uint32_t last_listener_attempt_ms_{0};
+  static constexpr uint32_t LISTENER_RETRY_MS = 5000;
+  bool listener_retry_pending_{false};
+  bool health_published_{false};
+  BridgeHealth published_health_{BridgeHealth::STARTING};
+  const char* last_failure_{nullptr};
   Mode mode_{Mode::NORMAL};
   bool armed_{false};
   uart_modes::EspIdfUartBus uart_{};
@@ -65,6 +82,10 @@ class RadioBridge : public Component {
   ByteRing<4096> uart_to_tcp_{};
   ByteRing<2048> tcp_to_uart_{};
   binary_sensor::BinarySensor* connected_sensor_{nullptr};
+  binary_sensor::BinarySensor* bridge_ready_sensor_{nullptr};
+  text_sensor::TextSensor* bridge_status_sensor_{nullptr};
+  text_sensor::TextSensor* last_disconnect_reason_sensor_{nullptr};
+  sensor::Sensor* transport_errors_sensor_{nullptr};
   sensor::Sensor* disconnects_sensor_{nullptr};
   text_sensor::TextSensor* mode_sensor_{nullptr};
   switch_::Switch* armed_switch_{nullptr};

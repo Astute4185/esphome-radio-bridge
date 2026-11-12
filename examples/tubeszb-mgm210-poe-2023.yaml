@@ -47,6 +47,14 @@ esphome-radio-bridge:
   driver: tubeszb_mgm210_poe_2023
   tcp_port: 6638
   maintenance_timeout: 10min
+  bridge_ready:
+    name: Radio Bridge Ready
+  bridge_status:
+    name: Radio Bridge Status
+  last_disconnect_reason:
+    name: TCP Last Disconnect Reason
+  transport_errors:
+    name: TCP Transport Errors
   connected:
     name: Zigbee TCP Client Connected
     id: zigbee_tcp_connected

@@ -18,6 +18,7 @@ namespace esphome::esphome_radio_bridge {
 static const char* const TAG = "esphome_radio_bridge";
 
 void RadioBridge::setup() {
+  this->publish_bridge_health_(BridgeHealth::STARTING);
   if (driver_ == nullptr || !drivers::valid_profile(driver_->profile())) {
     this->report_error_("No valid board driver configured");
     return;
@@ -39,7 +40,10 @@ void RadioBridge::setup() {
   }
   if (connected_sensor_ != nullptr) connected_sensor_->publish_state(false);
   if (disconnects_sensor_ != nullptr) disconnects_sensor_->publish_state(0);
+  if (transport_errors_sensor_ != nullptr) transport_errors_sensor_->publish_state(0);
+  if (last_disconnect_reason_sensor_ != nullptr) last_disconnect_reason_sensor_->publish_state("None");
   this->publish_mode_();
+  this->update_bridge_health_(network::is_connected());
 }
 
 void RadioBridge::dump_config() {
@@ -63,6 +67,8 @@ void RadioBridge::dump_config() {
 void RadioBridge::report_error_(const char* message) {
   ESP_LOGE(TAG, "%s", message);
   error_ = true;
+  last_failure_ = message;
+  this->publish_bridge_health_(BridgeHealth::FAILED);
   this->status_set_error();
   this->mark_failed();
 }
@@ -110,6 +116,7 @@ void RadioBridge::enter_bootloader() {
     return;
   }
   last_maintenance_activity_ = millis();
+  this->update_bridge_health_(network::is_connected());
   ESP_LOGI(TAG, "Radio bootloader entered; board-specific UART mode active");
 }
 
@@ -124,6 +131,7 @@ void RadioBridge::exit_bootloader() {
   }
   armed_ = false;
   if (armed_switch_ != nullptr) armed_switch_->turn_off();
+  this->update_bridge_health_(network::is_connected());
   ESP_LOGI(TAG, "Radio application reset and RTS/CTS restored");
 }
 
@@ -139,9 +147,45 @@ void RadioBridge::mark_maintenance_activity_() {
   if (mode_ == Mode::BOOTLOADER) last_maintenance_activity_ = millis();
 }
 
+void RadioBridge::publish_bridge_health_(BridgeHealth health) {
+  if (health_published_ && health == published_health_) return;
+  const bool first_publish = !health_published_;
+  published_health_ = health;
+  health_published_ = true;
+  if (bridge_ready_sensor_ != nullptr) {
+    if (first_publish)
+      bridge_ready_sensor_->publish_initial_state(bridge_is_ready(health));
+    else
+      bridge_ready_sensor_->publish_state(bridge_is_ready(health));
+  }
+  if (bridge_status_sensor_ != nullptr) {
+    if (health == BridgeHealth::FAILED && last_failure_ != nullptr)
+      bridge_status_sensor_->publish_state(std::string("Failed: ") + last_failure_);
+    else
+      bridge_status_sensor_->publish_state(bridge_health_name(health));
+  }
+}
+
+void RadioBridge::update_bridge_health_(bool network_ready) {
+  this->publish_bridge_health_(evaluate_bridge_health(uart_.ready(), error_, network_ready, listener_fd_ >= 0,
+                                                      mode_ == Mode::BOOTLOADER));
+}
+
+void RadioBridge::record_transport_error_() {
+  ++transport_errors_;
+  if (transport_errors_sensor_ != nullptr) transport_errors_sensor_->publish_state(transport_errors_);
+}
+
 void RadioBridge::open_listener_() {
+  // A failed bind must not flood logs or retry on every ESPHome loop iteration.
+  listener_retry_pending_ = true;
+  last_listener_attempt_ms_ = millis();
   listener_fd_ = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (listener_fd_ < 0) return;
+  if (listener_fd_ < 0) {
+    ESP_LOGW(TAG, "Cannot create TCP listener on port %u: errno %d", tcp_port_, errno);
+    this->record_transport_error_();
+    return;
+  }
   int reuse = 1;
   setsockopt(listener_fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
   sockaddr_in address{};
@@ -152,6 +196,7 @@ void RadioBridge::open_listener_() {
       ::listen(listener_fd_, 1) != 0 || fcntl(listener_fd_, F_SETFL, O_NONBLOCK) != 0) {
     ESP_LOGW(TAG, "Cannot listen on TCP port %u: errno %d", tcp_port_, errno);
     this->close_listener_();
+    this->record_transport_error_();
   }
 }
 
@@ -162,13 +207,17 @@ void RadioBridge::close_listener_() {
   }
 }
 
-void RadioBridge::close_client_() {
+void RadioBridge::close_client_(DisconnectReason reason) {
   if (client_fd_ < 0) return;
   ::close(client_fd_);
   client_fd_ = -1;
   ++disconnects_;
   if (disconnects_sensor_ != nullptr) disconnects_sensor_->publish_state(disconnects_);
   if (connected_sensor_ != nullptr) connected_sensor_->publish_state(false);
+  if (last_disconnect_reason_sensor_ != nullptr)
+    last_disconnect_reason_sensor_->publish_state(disconnect_reason_name(reason));
+  if (is_transport_error(reason)) this->record_transport_error_();
+  ESP_LOGI(TAG, "TCP client disconnected: %s", disconnect_reason_name(reason));
   tcp_to_uart_.clear();
   // Keep bootloader greeting cached while waiting for a host flasher.
   if (mode_ == Mode::NORMAL) uart_to_tcp_.clear();
@@ -215,11 +264,12 @@ void RadioBridge::bridge_tcp_() {
   size_t count = std::min(sizeof(incoming), tcp_to_uart_.free());
   int got = ::recv(client_fd_, incoming, count, 0);
   if (got == 0) {
-    this->close_client_();
+    this->close_client_(DisconnectReason::REMOTE_CLOSED);
     return;
   }
   if (got < 0) {
-    if (errno != EWOULDBLOCK && errno != EAGAIN) this->close_client_();
+    if (errno != EWOULDBLOCK && errno != EAGAIN && errno != EINTR)
+      this->close_client_(DisconnectReason::SOCKET_ERROR);
     return;
   }
   tcp_to_uart_.push(incoming, got);
@@ -231,20 +281,26 @@ void RadioBridge::send_tcp_() {
   int sent = ::send(client_fd_, uart_to_tcp_.head_data(), uart_to_tcp_.head_size(), 0);
   if (sent > 0) {
     uart_to_tcp_.consume(sent);
-  } else if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-    this->close_client_();
+  } else if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+    this->close_client_(DisconnectReason::SOCKET_ERROR);
   }
 }
 
 void RadioBridge::loop() {
   if (!uart_.ready() || error_) return;
-  if (!network::is_connected()) {
-    this->close_client_();
+  const bool network_ready = network::is_connected();
+  if (!network_ready) {
+    this->close_client_(DisconnectReason::NETWORK_LOST);
     this->close_listener_();
+    // Reopen immediately once the network returns.
+    listener_retry_pending_ = false;
   } else {
-    if (listener_fd_ < 0) this->open_listener_();
+    if (listener_fd_ < 0 &&
+        listener_retry_due(listener_retry_pending_, millis(), last_listener_attempt_ms_, LISTENER_RETRY_MS))
+      this->open_listener_();
     if (client_fd_ < 0) this->accept_client_();
   }
+  this->update_bridge_health_(network_ready);
   if (!tcp_to_uart_.empty()) {
     int accepted = uart_.write(tcp_to_uart_.head_data(), std::min<size_t>(tcp_to_uart_.head_size(), 128));
     if (accepted > 0) tcp_to_uart_.consume(accepted);
@@ -255,13 +311,14 @@ void RadioBridge::loop() {
   if (mode_ == Mode::BOOTLOADER &&
       static_cast<uint32_t>(millis() - last_maintenance_activity_) > maintenance_timeout_ms_) {
     ESP_LOGW(TAG, "Bootloader idle timeout: returning radio to normal mode");
-    this->close_client_();
+    this->close_client_(DisconnectReason::MAINTENANCE);
     this->exit_bootloader();
   }
 }
 
 void RadioBridge::on_shutdown() {
-  this->close_client_();
+  this->publish_bridge_health_(BridgeHealth::STOPPED);
+  this->close_client_(DisconnectReason::SHUTDOWN);
   this->close_listener_();
   // Release bootloader select and UART ownership during ESP32 shutdown.
   if (driver_ != nullptr) driver_->shutdown();

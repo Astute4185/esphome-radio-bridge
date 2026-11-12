@@ -18,6 +18,14 @@ logger:
 esphome-radio-bridge:
   driver: tubeszb_mgm210_poe_2023
   tcp_port: 6638
+  bridge_ready:
+    name: Radio Bridge Ready
+  bridge_status:
+    name: Radio Bridge Status
+  last_disconnect_reason:
+    name: TCP Last Disconnect Reason
+  transport_errors:
+    name: TCP Transport Errors
   connected:
     name: TCP Connected
   disconnects:
