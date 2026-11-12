@@ -5,9 +5,10 @@
 #include "driver/uart.h"
 #include "esp_err.h"
 #include "mode_factory.h"
+#include "radio_identification.h"
 namespace esphome::esphome_radio_bridge::uart_modes {
 // Owns the ESP-IDF UART. The gateway does not call uart_* functions directly.
-class EspIdfUartBus final : private UartHardware {
+class EspIdfUartBus final : public identification::ProbeUart, private UartHardware {
  public:
   bool start(const UartPinout& pins, uint32_t baud, UartModeId normal, UartModeId bootloader) {
     if (ready_ || baud == 0 || !valid_uart_pinout(pins, normal, bootloader)) return false;
@@ -37,9 +38,13 @@ class EspIdfUartBus final : private UartHardware {
     flush_input();
     return true;
   }
-  int read(uint8_t* data, size_t size) { return ready_ ? uart_read_bytes(port_, data, size, 0) : -1; }
-  int write(const uint8_t* data, size_t size) { return ready_ ? uart_write_bytes(port_, data, size) : -1; }
-  void flush_input() {
+  int read(uint8_t* data, size_t size) override {
+    return ready_ ? uart_read_bytes(port_, data, size, 0) : -1;
+  }
+  int write(const uint8_t* data, size_t size) override {
+    return ready_ ? uart_write_bytes(port_, data, size) : -1;
+  }
+  void flush_input() override {
     if (ready_) uart_flush_input(port_);
   }
   bool ready() const { return ready_; }

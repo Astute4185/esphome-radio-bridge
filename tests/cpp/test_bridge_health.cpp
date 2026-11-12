@@ -12,6 +12,8 @@ int main() {
   assert(evaluate_bridge_health(true, false, true, false, false) == BridgeHealth::LISTENER_UNAVAILABLE);
   assert(evaluate_bridge_health(true, false, true, true, true) == BridgeHealth::MAINTENANCE);
   assert(evaluate_bridge_health(true, false, true, true, false) == BridgeHealth::READY);
+  assert(evaluate_bridge_health(true, false, true, false, false, true) == BridgeHealth::IDENTIFYING);
+  assert(!bridge_is_ready(BridgeHealth::IDENTIFYING));
   assert(bridge_is_ready(BridgeHealth::READY));
   assert(!bridge_is_ready(BridgeHealth::MAINTENANCE));
   assert(!bridge_is_ready(BridgeHealth::NETWORK_OFFLINE));

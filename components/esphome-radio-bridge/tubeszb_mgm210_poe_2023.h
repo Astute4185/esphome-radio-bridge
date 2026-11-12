@@ -2,6 +2,7 @@
 
 #include "board_driver.h"
 #include "driver/gpio.h"
+#include "efr32_ezsp_probe.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "tubeszb_mgm210_poe_2023_profile.h"
@@ -36,9 +37,13 @@ class TubesZbMgm210Poe2023Driver final : public BoardDriver {
 
   bool exit_bootloader() override { return this->drive_boot_(false) && this->pulse_reset_(); }
 
+  identification::RadioProbe* identification_probe() override { return &probe_; }
+
   void shutdown() override { this->drive_boot_(false); }
 
  private:
+  identification::Efr32EzspProbe probe_{};
+
   bool drive_(int pin, bool active, bool active_low) {
     const uint32_t level = (active == active_low) ? 0 : 1;
     return gpio_set_level(static_cast<gpio_num_t>(pin), level) == ESP_OK;

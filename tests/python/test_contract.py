@@ -25,6 +25,8 @@ def test_external_component_layout():
         "esphome_radio_bridge.h",
         "esphome_radio_bridge.cpp",
         "board_driver.h",
+        "radio_identification.h",
+        "efr32_ezsp_probe.h",
         "uart_mode.h",
         "two_wire.h",
         "four_wire.h",
@@ -165,3 +167,40 @@ def test_bridge_health_test_yaml_defines_diagnostics():
             assert config[field]["name"]
         assert "connected" in config
         assert "disconnects" in config
+
+
+def test_driver_owned_radio_probe_on_uart_startup():
+    core = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
+    contract = (COMPONENT / "board_driver.h").read_text()
+    driver = (COMPONENT / "tubeszb_mgm210_poe_2023.h").read_text()
+    probe = (COMPONENT / "efr32_ezsp_probe.h").read_text()
+    assert "identification_probe()" in contract
+    assert "identification_probe() override" in driver
+    assert "begin_radio_identification_();" in core
+    assert "poll_radio_identification_();" in core
+    assert "close_listener_();" in core
+    assert "No ASH RSTACK response" in probe
+    assert "GET_VALUE" in probe
+    assert "return;  // Exclusive UART ownership" in core
+
+
+def test_radio_probe_entities_and_yaml():
+    schema = (COMPONENT / "__init__.py").read_text()
+    header = (COMPONENT / "esphome_radio_bridge.h").read_text()
+    for key, setter in (
+        ("installed_firmware", "set_installed_firmware_sensor"),
+        ("radio_identification_status", "set_radio_identification_status_sensor"),
+    ):
+        assert f'"{key}"' in schema
+        assert setter in schema
+        assert setter in header
+    assert 'CONF_PROBE_RADIO = "probe_radio"' in schema
+    for path in [
+        ROOT / "tests/components/esphome-radio-bridge/test.esp32-idf.yaml",
+        ROOT / "examples/tubeszb-minimal.yaml",
+        ROOT / "examples/tubeszb-mgm210-poe-2023.yaml",
+    ]:
+        config = yaml.load(path.read_text(), Loader=Loader)[COMPONENT.name]
+        assert config["installed_firmware"]["name"]
+        assert config["radio_identification_status"]["name"]
+        assert config["probe_radio"]["name"]

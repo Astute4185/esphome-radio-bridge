@@ -35,11 +35,15 @@ CONF_FLASH_ARMED = "flash_armed"
 CONF_RADIO_RESET = "radio_reset"
 CONF_ENTER_BOOTLOADER = "enter_bootloader"
 CONF_EXIT_BOOTLOADER = "exit_bootloader"
+CONF_INSTALLED_FIRMWARE = "installed_firmware"
+CONF_RADIO_IDENTIFICATION_STATUS = "radio_identification_status"
+CONF_PROBE_RADIO = "probe_radio"
 
 ns = cg.esphome_ns.namespace("esphome_radio_bridge")
 RadioBridge = ns.class_("RadioBridge", cg.Component)
 BoardModel = ns.namespace("drivers").enum("BoardModel", is_class=True)
 RadioResetButton = ns.class_("RadioResetButton", button.Button)
+ProbeRadioButton = ns.class_("ProbeRadioButton", button.Button)
 EnterBootloaderButton = ns.class_("EnterBootloaderButton", button.Button)
 ExitBootloaderButton = ns.class_("ExitBootloaderButton", button.Button)
 FlashArmedSwitch = ns.class_("FlashArmedSwitch", switch.Switch)
@@ -75,6 +79,15 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_MODE): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_INSTALLED_FIRMWARE): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_RADIO_IDENTIFICATION_STATUS): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_PROBE_RADIO): button.button_schema(
+                ProbeRadioButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
             ),
             cv.Optional(CONF_FLASH_ARMED): switch.switch_schema(
                 FlashArmedSwitch,
@@ -125,6 +138,14 @@ async def to_code(config):
     if conf := config.get(CONF_MODE):
         entity = await text_sensor.new_text_sensor(conf)
         cg.add(var.set_mode_sensor(entity))
+    if conf := config.get(CONF_INSTALLED_FIRMWARE):
+        entity = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_installed_firmware_sensor(entity))
+    if conf := config.get(CONF_RADIO_IDENTIFICATION_STATUS):
+        entity = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_radio_identification_status_sensor(entity))
+    if conf := config.get(CONF_PROBE_RADIO):
+        await button.new_button(conf, var)
     if conf := config.get(CONF_FLASH_ARMED):
         entity = await switch.new_switch(conf, var)
         cg.add(var.set_armed_switch(entity))

@@ -43,6 +43,7 @@ void RadioBridge::setup() {
   if (transport_errors_sensor_ != nullptr) transport_errors_sensor_->publish_state(0);
   if (last_disconnect_reason_sensor_ != nullptr) last_disconnect_reason_sensor_->publish_state("None");
   this->publish_mode_();
+  this->begin_radio_identification_();
   this->update_bridge_health_(network::is_connected());
 }
 
@@ -61,6 +62,8 @@ void RadioBridge::dump_config() {
   ESP_LOGCONFIG(TAG, "  Bootloader UART: %s", uart_modes::mode_name(board.bootloader_uart_mode));
   ESP_LOGCONFIG(TAG, "  Reset GPIO: %d", board.reset_gpio);
   ESP_LOGCONFIG(TAG, "  Boot GPIO: %d", board.boot_gpio);
+  ESP_LOGCONFIG(TAG, "  Radio identification: %s",
+                driver_->identification_probe() == nullptr ? "Unsupported" : "At UART startup");
   if (this->is_failed()) ESP_LOGE(TAG, "Component setup failed");
 }
 
@@ -71,6 +74,73 @@ void RadioBridge::report_error_(const char* message) {
   this->publish_bridge_health_(BridgeHealth::FAILED);
   this->status_set_error();
   this->mark_failed();
+}
+
+void RadioBridge::publish_radio_identity_(const identification::RadioIdentity& identity) {
+  if (reported_firmware_ != identity.firmware) {
+    reported_firmware_ = identity.firmware;
+    if (installed_firmware_sensor_ != nullptr) installed_firmware_sensor_->publish_state(identity.firmware);
+  }
+  if (reported_identification_status_ != identity.status) {
+    reported_identification_status_ = identity.status;
+    if (radio_identification_status_sensor_ != nullptr)
+      radio_identification_status_sensor_->publish_state(identity.status);
+  }
+}
+
+void RadioBridge::begin_radio_identification_() {
+  if (!uart_.ready() || driver_ == nullptr || identifying_ || client_fd_ >= 0 || mode_ != Mode::NORMAL)
+    return;
+  // All normal-mode UART startups pass through this driver-owned probe hook.
+  // No listener may accept a client until the probe is finished or times out.
+  this->close_listener_();
+  uart_to_tcp_.clear();
+  tcp_to_uart_.clear();
+  active_probe_ = driver_->identification_probe();
+  if (active_probe_ == nullptr) {
+    this->publish_radio_identity_({"Unknown", "Unsupported", false, 0});
+    return;
+  }
+  const auto state = active_probe_->begin(uart_, millis());
+  identifying_ = state == identification::ProbeState::RUNNING;
+  this->publish_radio_identity_(active_probe_->identity());
+  if (!identifying_) {
+    // Failure to identify is a diagnostic result, not failure of the TCP bridge.
+    uart_.flush_input();
+    active_probe_ = nullptr;
+  }
+}
+
+void RadioBridge::poll_radio_identification_() {
+  if (!identifying_ || active_probe_ == nullptr) return;
+  const auto state = active_probe_->poll(uart_, millis());
+  this->publish_radio_identity_(active_probe_->identity());
+  if (state == identification::ProbeState::RUNNING) return;
+  active_probe_ = nullptr;
+  identifying_ = false;
+  // An ASH/EZSP probe owns the radio's link state. Restore a fresh NCP session
+  // before exposing raw UART bytes to ZHA/zigpy over TCP.
+  if (!driver_->exit_bootloader()) {
+    this->report_error_("Unable to reset radio after identification");
+    return;
+  }
+  uart_.flush_input();
+  uart_to_tcp_.clear();
+  tcp_to_uart_.clear();
+  listener_retry_pending_ = false;
+  ESP_LOGI(TAG, "Radio identification finished, normal TCP UART access restored");
+}
+
+void RadioBridge::probe_radio() {
+  if (error_ || !uart_.ready() || mode_ != Mode::NORMAL || armed_ || client_fd_ >= 0 || identifying_) {
+    ESP_LOGW(TAG, "Radio probe denied: TCP client, maintenance or another probe is active");
+    reported_identification_status_ = "Blocked: client or maintenance active";
+    if (radio_identification_status_sensor_ != nullptr)
+      radio_identification_status_sensor_->publish_state(reported_identification_status_);
+    return;
+  }
+  this->begin_radio_identification_();
+  this->update_bridge_health_(network::is_connected());
 }
 
 bool RadioBridge::configure_uart_(Mode new_mode) {
@@ -91,15 +161,20 @@ bool RadioBridge::configure_uart_(Mode new_mode) {
 }
 
 void RadioBridge::radio_reset() {
-  if (!allowed(mode_, Command::RESET, armed_, client_fd_ >= 0)) {
+  if (driver_ == nullptr || error_ || identifying_ ||
+      !allowed(mode_, Command::RESET, armed_, client_fd_ >= 0)) {
     ESP_LOGW(TAG, "Reset denied: TCP client connected or maintenance active");
     return;
   }
-  if (!driver_->reset_radio()) this->report_error_("Radio reset failed");
+  if (!driver_->reset_radio())
+    this->report_error_("Radio reset failed");
+  else
+    this->begin_radio_identification_();
 }
 
 void RadioBridge::enter_bootloader() {
-  if (!allowed(mode_, Command::ENTER_BOOTLOADER, armed_, client_fd_ >= 0) ||
+  if (driver_ == nullptr || error_ || identifying_ ||
+      !allowed(mode_, Command::ENTER_BOOTLOADER, armed_, client_fd_ >= 0) ||
       !driver_->profile().supports_bootloader) {
     ESP_LOGW(TAG, "Bootloader denied: disconnect ZHA and arm maintenance first");
     return;
@@ -121,7 +196,8 @@ void RadioBridge::enter_bootloader() {
 }
 
 void RadioBridge::exit_bootloader() {
-  if (!allowed(mode_, Command::EXIT_BOOTLOADER, armed_, client_fd_ >= 0)) {
+  if (driver_ == nullptr || error_ || identifying_ ||
+      !allowed(mode_, Command::EXIT_BOOTLOADER, armed_, client_fd_ >= 0)) {
     ESP_LOGW(TAG, "Exit bootloader denied while flashing TCP client is connected");
     return;
   }
@@ -131,6 +207,7 @@ void RadioBridge::exit_bootloader() {
   }
   armed_ = false;
   if (armed_switch_ != nullptr) armed_switch_->turn_off();
+  this->begin_radio_identification_();
   this->update_bridge_health_(network::is_connected());
   ESP_LOGI(TAG, "Radio application reset and RTS/CTS restored");
 }
@@ -168,7 +245,7 @@ void RadioBridge::publish_bridge_health_(BridgeHealth health) {
 
 void RadioBridge::update_bridge_health_(bool network_ready) {
   this->publish_bridge_health_(evaluate_bridge_health(uart_.ready(), error_, network_ready, listener_fd_ >= 0,
-                                                      mode_ == Mode::BOOTLOADER));
+                                                      mode_ == Mode::BOOTLOADER, identifying_));
 }
 
 void RadioBridge::record_transport_error_() {
@@ -288,6 +365,11 @@ void RadioBridge::send_tcp_() {
 
 void RadioBridge::loop() {
   if (!uart_.ready() || error_) return;
+  if (identifying_) {
+    this->poll_radio_identification_();
+    this->update_bridge_health_(network::is_connected());
+    return;  // Exclusive UART ownership: TCP must never read probe responses.
+  }
   const bool network_ready = network::is_connected();
   if (!network_ready) {
     this->close_client_(DisconnectReason::NETWORK_LOST);
@@ -317,6 +399,8 @@ void RadioBridge::loop() {
 }
 
 void RadioBridge::on_shutdown() {
+  if (active_probe_ != nullptr && identifying_) active_probe_->cancel();
+  identifying_ = false;
   this->publish_bridge_health_(BridgeHealth::STOPPED);
   this->close_client_(DisconnectReason::SHUTDOWN);
   this->close_listener_();
