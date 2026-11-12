@@ -6,9 +6,9 @@
   "versions": [
     {
       "firmware_version": "0.1",
-      "radio_version": "9.1.2",
+      "radio_version": "9.1.1",
       "release_type": "beta",
-      "sha256": "7bdbf32af5b11f3ce08ee60828bf65d8ba3490794b903076dd0d6a125234e76d",
+      "sha256": "2698c8c227c3b2cddef03289396d09483767d0f3f35b8fe84861d1aaeab600a9",
       "file": "https://github.com/Astute4185/tubeszb_mgm210_firmware/releases/download/DevSample-4v1/tubeszb_mgm210_zha_2023_9_1_2_9.1.2.0.gbl"
     }
 ]
