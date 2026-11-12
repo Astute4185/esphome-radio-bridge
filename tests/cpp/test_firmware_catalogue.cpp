@@ -114,6 +114,20 @@ int main() {
                                 "DevSample-4v1/tubeszb_mgm210_zha_2023_9_1_2_9.1.2.0.gbl"});
   assert(valid_manifest_metadata(published));
   assert(manifest_validation_error(published) == nullptr);
+  assert(latest_radio_version(published) == "9.1.2");
+  // Display the actual radio version, not the release/package ID (0.1).
+  published.versions.push_back({"0.2", "9.2.1", "release", std::string(64, 'b'),
+                                "https://github.com/owner/repo/releases/download/v0.2/fw.gbl"});
+  published.latest = "0.2";
+  assert(latest_radio_version(published) == "9.2.1");
+  published.latest = "0.1";
+  assert(latest_radio_version(published) == "9.1.2");
+  published.latest = "0.3";
+  assert(latest_radio_version(published) == "Unknown");
+  published.latest.clear();
+  assert(latest_radio_version(published) == "None");
+  published.latest = "0.1";
+  published.versions.pop_back();
   published.versions.front().sha256 = "invalid";
   assert(std::string(manifest_validation_error(published)) ==
          "Invalid sha256 (expected 64 hexadecimal characters)");

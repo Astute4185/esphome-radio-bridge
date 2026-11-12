@@ -72,3 +72,17 @@ def test_arduinojson_array_api_remains_compatible():
     source = (COMPONENT / "firmware_catalogue.cpp").read_text()
     assert "entries.size() != 0" in source
     assert "entries.empty()" not in source
+
+
+def test_latest_firmware_entity_uses_radio_stack_version_not_release_id():
+    header = (COMPONENT / "firmware_catalogue.h").read_text()
+    core = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
+    downloader = (COMPONENT / "firmware_catalogue.cpp").read_text()
+    assert "latest_radio_version(const FirmwareLoadResult& metadata)" in header
+    assert "release.firmware_version == metadata.latest" in header
+    assert "return release.radio_version;" in header
+    assert "firmware::latest_radio_version(catalogue_result_)" in core
+    assert '"Loaded: " + latest_radio_version(out)' in downloader
+    # Preserve release IDs for update comparison and download/flash selection.
+    assert "firmware::assess_update(catalogue_result_" in core
+    assert "firmware::select_latest_release(catalogue_result_)" in core

@@ -236,7 +236,7 @@ void FirmwareCatalogue::worker_(void* param) {
       break;
     }
     out.ok = true;
-    out.message = out.latest.empty() ? "Loaded: no releases" : "Loaded: " + out.latest;
+    out.message = out.latest.empty() ? "Loaded: no releases" : "Loaded: " + latest_radio_version(out);
   } while (false);
   if (!out.ok) out.message = error.empty() ? "Catalogue failed" : error;
   job->finished.store(true, std::memory_order_release);

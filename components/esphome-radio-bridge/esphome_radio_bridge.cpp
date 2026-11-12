@@ -471,7 +471,7 @@ void RadioBridge::publish_update_assessment_() {
     return;
   }
   if (latest_firmware_sensor_ != nullptr) {
-    const std::string latest = catalogue_result_.latest.empty() ? "None" : catalogue_result_.latest;
+    const std::string latest = firmware::latest_radio_version(catalogue_result_);
     if (!latest_firmware_sensor_->has_state() || latest_firmware_sensor_->state != latest)
       latest_firmware_sensor_->publish_state(latest);
   }

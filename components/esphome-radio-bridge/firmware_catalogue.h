@@ -118,6 +118,16 @@ struct FirmwareLoadResult {
   std::vector<FirmwareRelease> versions;
 };
 
+// The manifest's `latest` is a release identifier, not the radio stack version.
+// Display the matching release's `radio_version` in Home Assistant while
+// retaining the release identifier for update assessment and flashing.
+inline std::string latest_radio_version(const FirmwareLoadResult& metadata) {
+  if (metadata.latest.empty()) return "None";
+  for (const auto& release : metadata.versions)
+    if (release.firmware_version == metadata.latest) return release.radio_version;
+  return "Unknown";
+}
+
 // Data validation is independent of JSON and HTTP and can be unit-tested natively.
 inline const char* release_validation_error(const FirmwareRelease& release) {
   if (!valid_firmware_version(release.firmware_version)) return "Invalid firmware_version";
