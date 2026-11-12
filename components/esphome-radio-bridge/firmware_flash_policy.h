@@ -15,10 +15,18 @@ struct FlashPreflight {
   bool already_flashing{false};
 };
 
-inline bool can_flash(const FlashPreflight& state) {
-  return state.armed && !state.client_connected && !state.radio_identifying && state.normal_mode &&
-         state.network_ready && state.configured && !state.already_flashing;
+inline const char* flash_block_reason(const FlashPreflight& state) {
+  if (state.already_flashing) return "another update is in progress";
+  if (!state.configured) return "flashing is not configured or ready";
+  if (!state.armed) return "arm firmware maintenance first";
+  if (state.client_connected) return "disconnect the TCP client first";
+  if (state.radio_identifying) return "radio identification is active";
+  if (!state.normal_mode) return "radio is not in normal mode";
+  if (!state.network_ready) return "network offline";
+  return nullptr;
 }
+
+inline bool can_flash(const FlashPreflight& state) { return flash_block_reason(state) == nullptr; }
 
 inline const FirmwareRelease* select_latest_release(const FirmwareLoadResult& metadata) {
   if (!metadata.ok || !valid_manifest_metadata(metadata)) return nullptr;

@@ -22,7 +22,7 @@ void RadioBridge::setup() {
   this->publish_bridge_health_(BridgeHealth::STARTING);
   if (manifest_override_text_ != nullptr) manifest_override_text_->restore_override();
   this->publish_catalogue_status_("Idle");
-  this->publish_firmware_update_status_("Idle");
+  this->publish_firmware_update_status_();
   if (driver_ == nullptr || !drivers::valid_profile(driver_->profile())) {
     this->report_error_("No valid board driver configured");
     return;
@@ -541,7 +541,8 @@ void ManifestOverrideText::control(const std::string& value) {
   this->publish_state(value);
 }
 
-void RadioBridge::publish_firmware_update_status_(const std::string& status) {
+void RadioBridge::publish_firmware_update_status_() {
+  const auto& status = flash_diagnostics_.status();
   if (reported_firmware_update_status_ == status) return;
   reported_firmware_update_status_ = status;
   if (firmware_update_status_sensor_ != nullptr) firmware_update_status_sensor_->publish_state(status);
@@ -563,17 +564,21 @@ void RadioBridge::flash_firmware() {
                                        configured,
                                        flash_phase_ != FirmwareFlashPhase::IDLE || downloader_.busy()};
   if (!firmware::can_flash(state)) {
-    ESP_LOGW(TAG, "Firmware flash rejected: arm maintenance, disconnect ZHA, and ensure network is ready");
-    this->publish_firmware_update_status_("Blocked: maintenance or bridge not ready");
+    const char* reason = firmware::flash_block_reason(state);
+    ESP_LOGW(TAG, "Firmware flash rejected: %s", reason != nullptr ? reason : "unknown");
+    flash_diagnostics_.rejected(reason);
+    this->publish_firmware_update_status_();
     return;
   }
   const firmware::FirmwareRelease* release = firmware::select_latest_release(catalogue_result_);
   if (release == nullptr) {
-    this->publish_firmware_update_status_("Failed: no valid firmware release selected");
+    flash_diagnostics_.failed("no valid firmware release selected");
+    this->publish_firmware_update_status_();
     return;
   }
   if (!downloader_.start(http_request_, *release)) {
-    this->publish_firmware_update_status_("Failed: download could not start");
+    flash_diagnostics_.failed("download could not start");
+    this->publish_firmware_update_status_();
     return;
   }
   // Claim exclusive UART access before the worker starts; no ZHA client may connect.
@@ -582,18 +587,15 @@ void RadioBridge::flash_firmware() {
   tcp_to_uart_.clear();
   flash_source_epoch_ = catalogue_source_epoch_;
   flash_phase_ = FirmwareFlashPhase::DOWNLOADING;
-  last_flash_progress_ = 0;
-  this->publish_firmware_update_status_("Downloading 0%");
+  flash_diagnostics_.start();
+  this->publish_firmware_update_status_();
   this->update_bridge_health_(network::is_connected());
 }
 
 void RadioBridge::poll_firmware_flash_() {
   if (flash_phase_ == FirmwareFlashPhase::DOWNLOADING) {
     const unsigned progress = downloader_.progress_percent();
-    if (progress > last_flash_progress_ && (progress >= last_flash_progress_ + 5 || progress == 100)) {
-      last_flash_progress_ = progress;
-      this->publish_firmware_update_status_("Downloading " + std::to_string(progress) + "%");
-    }
+    if (flash_diagnostics_.download_progress(progress)) this->publish_firmware_update_status_();
     firmware::DownloadedFirmware ready;
     if (!downloader_.collect(ready)) return;
     if (!ready.ok) {
@@ -606,7 +608,8 @@ void RadioBridge::poll_firmware_flash_() {
       return;
     }
     flash_image_ = std::move(ready);
-    this->publish_firmware_update_status_("Verified: entering bootloader");
+    flash_diagnostics_.verified();
+    this->publish_firmware_update_status_();
     if (!this->configure_uart_(Mode::BOOTLOADER)) {
       this->finish_firmware_flash_(false, "bootloader UART setup failed");
       return;
@@ -621,8 +624,8 @@ void RadioBridge::poll_firmware_flash_() {
       return;
     }
     flash_phase_ = FirmwareFlashPhase::FLASHING;
-    last_flash_progress_ = 0;
-    this->publish_firmware_update_status_("Flashing 0%");
+    flash_diagnostics_.flashing();
+    this->publish_firmware_update_status_();
     return;
   }
   if (flash_phase_ != FirmwareFlashPhase::FLASHING) return;
@@ -633,10 +636,7 @@ void RadioBridge::poll_firmware_flash_() {
   }
   protocol->poll(uart_, millis());
   const unsigned progress = protocol->percent();
-  if (progress > last_flash_progress_ && (progress >= last_flash_progress_ + 5 || progress == 100)) {
-    last_flash_progress_ = progress;
-    this->publish_firmware_update_status_("Flashing " + std::to_string(progress) + "%");
-  }
+  if (flash_diagnostics_.flash_progress(progress)) this->publish_firmware_update_status_();
   if (protocol->succeeded()) {
     this->finish_firmware_flash_(true, "Completed");
   } else if (protocol->failed()) {
@@ -652,15 +652,29 @@ void RadioBridge::finish_firmware_flash_(bool success, const std::string& reason
   flash_phase_ = FirmwareFlashPhase::IDLE;
   flash_image_ = {};  // Release access to the verified flash-staging image.
   if (in_bootloader) {
-    if (!driver_->exit_bootloader() || !this->configure_uart_(Mode::NORMAL)) {
-      this->publish_firmware_update_status_("Failed: radio recovery failed");
+    flash_diagnostics_.restoring();
+    this->publish_firmware_update_status_();
+    const bool reset_ok = driver_ != nullptr && driver_->exit_bootloader();
+    const bool uart_ok = this->configure_uart_(Mode::NORMAL);
+    if (!reset_ok || !uart_ok) {
+      const char* reason = !reset_ok && !uart_ok ? "radio reset and UART restoration failed"
+                           : !reset_ok           ? "radio reset failed"
+                                                 : "UART restoration failed";
+      flash_diagnostics_.failed(reason);
+      this->publish_firmware_update_status_();
+      armed_ = false;
+      if (armed_switch_ != nullptr) armed_switch_->turn_off();
       this->report_error_("Radio recovery failed after firmware update");
       return;
     }
   }
   armed_ = false;
   if (armed_switch_ != nullptr) armed_switch_->turn_off();
-  this->publish_firmware_update_status_(success ? "Completed" : "Failed: " + reason);
+  if (success)
+    flash_diagnostics_.completed();
+  else
+    flash_diagnostics_.failed(reason);
+  this->publish_firmware_update_status_();
   // New firmware may identify differently. Refresh the driver-owned installed version.
   if (in_bootloader) this->begin_radio_identification_();
   listener_retry_pending_ = false;
