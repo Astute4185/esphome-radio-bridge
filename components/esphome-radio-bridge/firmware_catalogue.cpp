@@ -98,45 +98,93 @@ bool parse_catalogue(const std::string& body, const std::string& catalogue_url, 
 }
 
 bool parse_manifest(const std::string& body, const std::string& board, const std::string& radio_type,
-                    FirmwareLoadResult& out) {
-  return json::parse_json(body, [&](JsonObject root) -> bool {
-    if (root["schema_version"].as<int>() != 1 || !root["board"].is<const char*>() ||
-        !root["radio_type"].is<const char*>() || root["board"].as<std::string>() != board ||
-        root["radio_type"].as<std::string>() != radio_type || !root["versions"].is<JsonArray>())
+                    FirmwareLoadResult& out, std::string& error) {
+  const bool parsed = json::parse_json(body, [&](JsonObject root) -> bool {
+    if (root["schema_version"].as<int>() != 1) {
+      error = "Unsupported manifest schema_version (expected 1)";
       return false;
-
+    }
+    if (!root["board"].is<const char*>()) {
+      error = "Manifest board is missing or not a string";
+      return false;
+    }
+    if (root["board"].as<std::string>() != board) {
+      error = "Manifest board mismatch (expected " + board + ")";
+      return false;
+    }
+    if (!root["radio_type"].is<const char*>()) {
+      error = "Manifest radio_type is missing or not a string";
+      return false;
+    }
+    if (root["radio_type"].as<std::string>() != radio_type) {
+      error = "Manifest radio_type mismatch (expected " + radio_type + ")";
+      return false;
+    }
+    if (!root["versions"].is<JsonArray>()) {
+      error = "Manifest versions must be an array";
+      return false;
+    }
     const JsonArray entries = root["versions"].as<JsonArray>();
-    if (entries.size() > MAX_RELEASES) return false;
-    // An empty manifest is valid, but must not claim a nonexistent 'latest'.
+    if (entries.size() > MAX_RELEASES) {
+      error = "Manifest exceeds maximum release count";
+      return false;
+    }
     if (root["latest"].isNull()) {
-      if (entries.size() != 0) return false;
+      if (entries.size() != 0) {
+        error = "Manifest latest cannot be null when versions are present";
+        return false;
+      }
       out.latest.clear();
     } else if (root["latest"].is<const char*>()) {
       out.latest = root["latest"].as<std::string>();
-      if (!valid_firmware_version(out.latest)) return false;
+      if (!valid_firmware_version(out.latest)) {
+        error = "Invalid manifest latest version";
+        return false;
+      }
     } else {
+      error = "Manifest latest must be a version string or null";
       return false;
     }
 
     std::vector<FirmwareRelease> releases;
     releases.reserve(entries.size());
+    size_t release_index = 0;
     for (JsonVariant entry_variant : entries) {
-      if (!entry_variant.is<JsonObject>()) return false;
+      if (!entry_variant.is<JsonObject>()) {
+        error = "Manifest versions[" + std::to_string(release_index) + "] must be an object";
+        return false;
+      }
       const JsonObject entry = entry_variant.as<JsonObject>();
       for (const char* field : {"firmware_version", "radio_version", "release_type", "sha256", "file"}) {
-        if (!entry[field].is<const char*>()) return false;
+        if (!entry[field].is<const char*>()) {
+          error = "Manifest versions[" + std::to_string(release_index) + "]." + field +
+                  " is missing or not a string";
+          return false;
+        }
       }
       FirmwareRelease release{entry["firmware_version"].as<std::string>(),
                               entry["radio_version"].as<std::string>(),
                               entry["release_type"].as<std::string>(), entry["sha256"].as<std::string>(),
                               entry["file"].as<std::string>()};
+      if (const char* reason = release_validation_error(release); reason != nullptr) {
+        error = "Manifest versions[" + std::to_string(release_index) + "]: " + reason;
+        return false;
+      }
       releases.push_back(std::move(release));
+      ++release_index;
     }
     out.board = board;
     out.radio_type = radio_type;
     out.versions = std::move(releases);
-    return valid_manifest_metadata(out);
+    if (!valid_manifest_metadata(out)) {
+      const char* reason = manifest_validation_error(out);
+      error = reason == nullptr ? "Manifest release metadata rejected" : reason;
+      return false;
+    }
+    return true;
   });
+  if (!parsed && error.empty()) error = "Manifest is not valid JSON or could not be parsed";
+  return parsed;
 }
 
 }  // namespace
@@ -180,8 +228,11 @@ void FirmwareCatalogue::worker_(void* param) {
     out.manifest_url = manifest_url;
     std::string manifest_body;
     if (!download_json(job->request, manifest_url, manifest_body, error)) break;
-    if (!parse_manifest(manifest_body, job->board, job->radio_type, out)) {
-      error = "Manifest schema, compatibility, or release metadata invalid";
+    if (!parse_manifest(manifest_body, job->board, job->radio_type, out, error)) {
+      // Avoid logging query strings, which may contain credentials in custom URLs.
+      ESP_LOGW(TAG, "Manifest rejected for board=%s radio=%s source=%s: %s", job->board.c_str(),
+               job->radio_type.c_str(), manifest_url.substr(0, manifest_url.find('?')).c_str(),
+               error.c_str());
       break;
     }
     out.ok = true;

@@ -112,27 +112,42 @@ struct FirmwareLoadResult {
 };
 
 // Data validation is independent of JSON and HTTP and can be unit-tested natively.
-inline bool valid_release(const FirmwareRelease& release) {
-  return valid_firmware_version(release.firmware_version) && !release.radio_version.empty() &&
-         release.radio_version.size() <= 64 && valid_sha256(release.sha256) &&
-         is_github_release_url(release.file) &&
-         (release.release_type == "beta" || release.release_type == "candidate" ||
-          release.release_type == "release");
+inline const char* release_validation_error(const FirmwareRelease& release) {
+  if (!valid_firmware_version(release.firmware_version)) return "Invalid firmware_version";
+  if (release.radio_version.empty() || release.radio_version.size() > 64) return "Invalid radio_version";
+  if (!valid_sha256(release.sha256)) return "Invalid sha256 (expected 64 hexadecimal characters)";
+  if (!is_github_release_url(release.file)) return "Invalid file (expected HTTPS GitHub Release URL)";
+  if (release.release_type != "beta" && release.release_type != "candidate" &&
+      release.release_type != "release")
+    return "Invalid release_type (expected beta, candidate or release)";
+  return nullptr;
 }
 
-inline bool valid_manifest_metadata(const FirmwareLoadResult& metadata) {
-  if (metadata.latest.empty() != metadata.versions.empty()) return false;
-  if (!metadata.latest.empty() && !valid_firmware_version(metadata.latest)) return false;
+inline bool valid_release(const FirmwareRelease& release) {
+  return release_validation_error(release) == nullptr;
+}
+
+inline const char* manifest_validation_error(const FirmwareLoadResult& metadata) {
+  if (metadata.latest.empty() != metadata.versions.empty())
+    return "Manifest latest and versions are inconsistent";
+  if (!metadata.latest.empty() && !valid_firmware_version(metadata.latest))
+    return "Invalid latest firmware version";
   bool latest_found = metadata.latest.empty();
   for (size_t i = 0; i < metadata.versions.size(); ++i) {
     const auto& release = metadata.versions[i];
-    if (!valid_release(release)) return false;
+    if (const char* reason = release_validation_error(release); reason != nullptr) return reason;
     if (release.firmware_version == metadata.latest) latest_found = true;
     for (size_t j = 0; j < i; ++j) {
-      if (metadata.versions[j].firmware_version == release.firmware_version) return false;
+      if (metadata.versions[j].firmware_version == release.firmware_version)
+        return "Duplicate firmware_version in versions";
     }
   }
-  return latest_found;
+  if (!latest_found) return "Manifest latest does not match a published firmware_version";
+  return nullptr;
+}
+
+inline bool valid_manifest_metadata(const FirmwareLoadResult& metadata) {
+  return manifest_validation_error(metadata) == nullptr;
 }
 
 // Worker task never touches the UART or any ESPHome entity; the main loop owns published state.

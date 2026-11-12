@@ -83,4 +83,28 @@ int main() {
   manifest.versions.clear();
   manifest.latest.clear();
   assert(valid_manifest_metadata(manifest));  // Valid empty catalogue
+
+  // Published TubesZB beta manifest must satisfy the same metadata contract
+  // as the on-device parser. A valid release is independent of download reachability.
+  FirmwareLoadResult published;
+  published.board = "tubeszb_mgm210_poe_2023";
+  published.radio_type = "zha";
+  published.latest = "0.1";
+  published.versions.push_back({"0.1", "9.1.2", "beta",
+                                "7bdbf32af5b11f3ce08ee60828bf65d8ba3490794b903076dd0d6a125234e76d",
+                                "https://github.com/Astute4185/tubeszb_mgm210_firmware/releases/download/"
+                                "DevSample-4v1/tubeszb_mgm210_zha_2023_9_1_2_9.1.2.0.gbl"});
+  assert(valid_manifest_metadata(published));
+  assert(manifest_validation_error(published) == nullptr);
+  published.versions.front().sha256 = "invalid";
+  assert(std::string(manifest_validation_error(published)) ==
+         "Invalid sha256 (expected 64 hexadecimal characters)");
+  published.versions.front().sha256 = std::string(64, 'a');
+  published.versions.front().file = "http://example.org/firmware.gbl";
+  assert(std::string(manifest_validation_error(published)) ==
+         "Invalid file (expected HTTPS GitHub Release URL)");
+  published.versions.front().file = release.file;
+  published.versions.front().release_type = "superseded";
+  assert(std::string(manifest_validation_error(published)) ==
+         "Invalid release_type (expected beta, candidate or release)");
 }
