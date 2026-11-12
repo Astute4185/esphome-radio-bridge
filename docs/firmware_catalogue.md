@@ -3,9 +3,11 @@
 `feature/firmware-catalogue` adds on-demand HTTPS metadata resolution, not daily update
 checks or flashing. The next branch introduces scheduling and update-available state.
 
-- `catalogue_url` (optional): absolute HTTPS URL to `catalogue.json` hosted in the
-  separate firmware repository. The example uses the intended production repository;
-  configure it to match your published URL.
+- `catalogue_url` (optional): absolute HTTPS URL overriding the selected board
+  driver's default catalogue. With no YAML value, the driver supplies its own
+  canonical URL. The TubesZB driver defaults to
+  `https://raw.githubusercontent.com/Astute4185/esphome-radio-bridge/main/firmware/catalogue.json`.
+  Other drivers may supply different URLs or none at all.
 - `manifest_override` (optional ESPHome text entity): absolute HTTPS URL directly to
   an alternative `manifest.json`. Persisted in ESPHome preferences. Clear it to use
   the default catalogue again. Changing it invalidates cached metadata.
@@ -13,11 +15,17 @@ checks or flashing. The next branch introduces scheduling and update-available s
   with respect to the ESPHome main loop. No automatic polling in this branch.
 - `catalogue_status` (optional text sensor): Idle, Loading, Loaded version, or Error.
 
-A custom manifest override can be used without configuring a catalogue URL.
-Without either URL, the radio bridge remains functional and the catalogue is disabled.
+A custom manifest override takes precedence over the driver default and the YAML
+`catalogue_url`. Clearing the override returns to the driver's catalogue without
+reflashing. Changing the YAML `catalogue_url` still requires an ESP32 firmware update.
+If the selected driver has no default and neither override is configured, the
+radio bridge remains functional with firmware checks disabled.
 
-The driver supplies `board` and `radio_type`. The catalogue is resolved relative to
-its own URL; entries with `..`, schemes, or host changes are rejected.
+The driver supplies `board`, `radio_type`, and its optional default catalogue URL.
+The resolver handles catalogue-directory-relative and overlapping repository-root
+paths, including `firmware/...` entries when the catalogue is already hosted under
+`firmware/`. A `./` prefix explicitly means catalogue-directory-relative. URL
+traversal, different hosts and non-HTTPS paths are rejected.
 
 Both catalogue and manifest use `schema_version: 1`. Manifests contain a `latest`
 version pointer and a `versions` array. Each release specifies `firmware_version`,

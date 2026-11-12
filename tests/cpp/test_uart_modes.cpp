@@ -24,6 +24,9 @@ int main() {
   constexpr UartPinout two{2, 17, 16, -1, -1, 0};
   static_assert(valid_uart_pinout(two, UartModeId::TWO_WIRE, UartModeId::TWO_WIRE));
   static_assert(!valid_uart_pinout(two, UartModeId::FOUR_WIRE, UartModeId::TWO_WIRE));
+  constexpr UartPinout wired_but_disabled{1, 4, 36, 2, 13, 122};
+  static_assert(valid_uart_pinout(wired_but_disabled, UartModeId::TWO_WIRE, UartModeId::TWO_WIRE));
+  static_assert(!valid_uart_pinout({1, 4, 36, 2, -1, 122}, UartModeId::TWO_WIRE, UartModeId::TWO_WIRE));
   static_assert(!valid_uart_mode(static_cast<UartModeId>(255)));
   FakeUart hw;
   assert(mode_strategy(UartModeId::TWO_WIRE).apply(hw, two));
@@ -32,12 +35,16 @@ int main() {
   hw.calls.clear();
   assert(mode_strategy(mgm.normal_uart_mode).apply(hw, mgm.uart));
   assert(mode_strategy(mgm.bootloader_uart_mode).apply(hw, mgm.uart));
-  // Important regression: same baud, but full flow-control strategy re-applied.
+  // POC: normal and bootloader both disable hardware flow control.
+  // Reapply the strategy even though the mode and baud rate are unchanged.
   static_assert(mgm.normal_baud == mgm.bootloader_baud);
   assert(mode_strategy(mgm.normal_uart_mode).apply(hw, mgm.uart));
-  assert((hw.calls == std::vector<std::string>{"flow:off:0", "pins:4,36,2,13", "flow:on:122", "flow:off:0",
-                                               "pins:4,36,-1,-1", "flow:off:0", "pins:4,36,2,13",
-                                               "flow:on:122"}));
+  assert((hw.calls == std::vector<std::string>{"flow:off:0", "pins:4,36,-1,-1", "flow:off:0",
+                                               "pins:4,36,-1,-1", "flow:off:0", "pins:4,36,-1,-1"}));
+  // The four-wire strategy remains available for the later firmware migration.
+  hw.calls.clear();
+  assert(mode_strategy(UartModeId::FOUR_WIRE).apply(hw, mgm.uart));
+  assert((hw.calls == std::vector<std::string>{"flow:off:0", "pins:4,36,2,13", "flow:on:122"}));
   hw.calls.clear();
   hw.fail_pins = true;
   assert(!mode_strategy(UartModeId::FOUR_WIRE).apply(hw, mgm.uart));

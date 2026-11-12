@@ -56,6 +56,8 @@ class BoardDriver {
   virtual identification::RadioProbe* identification_probe() { return nullptr; }
   // Unsupported protocols return nullptr; new chipsets provide their own implementation.
   virtual firmware::FlashProtocol* flash_protocol() { return nullptr; }
+  // Optional board-specific default. The generic bridge never assumes a firmware host.
+  virtual const char* default_catalogue_url() const { return nullptr; }
   virtual void shutdown() = 0;
 };
 

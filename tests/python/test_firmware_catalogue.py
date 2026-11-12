@@ -69,7 +69,27 @@ def test_catalogue_configuration_and_entities():
         config = yaml.load(yaml_file.read_text(), Loader=Loader)
         assert config["http_request"]["verify_ssl"] is True
         bridge = config["esphome-radio-bridge"]
-        assert bridge["catalogue_url"].startswith("https://")
+        assert "catalogue_url" not in bridge  # Driver provides the canonical URL.
         assert bridge["manifest_override"]["name"]
         assert bridge["catalogue_status"]["name"]
         assert bridge["refresh_catalogue"]["name"]
+
+
+def test_driver_default_catalogue_and_explicit_yaml_override_contract():
+    schema = (COMPONENT / "__init__.py").read_text()
+    contract = (COMPONENT / "board_driver.h").read_text()
+    driver = (COMPONENT / "tubeszb_mgm210_poe_2023.h").read_text()
+    core = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
+    assert "cv.Optional(CONF_CATALOGUE_URL): secure_url" in schema
+    assert "default_catalogue_url()" in contract
+    assert "default_catalogue_url() const override" in driver
+    assert (
+        "https://raw.githubusercontent.com/Astute4185/esphome-radio-bridge/main/firmware/catalogue.json"
+        in driver
+    )
+    assert "firmware::select_catalogue_url(catalogue_url_, driver_default)" in core
+    assert "driver_->default_catalogue_url()" in core
+    assert "catalogue_.start(http_request_, catalogue_url," in core
+    assert "effective_catalogue_url_()" in core
+    assert "Board driver default" in core
+    assert "YAML override" in core

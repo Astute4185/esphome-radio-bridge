@@ -10,7 +10,10 @@ may be used with other radio modules without duplicating the TCP bridge.
 
 A production driver implements `BoardDriver` and provides a static-validated
 `BoardProfile` with UART port and pins, normal/bootloader mode IDs, baud rates,
-radio reset/bootloader GPIO and polarity, and firmware protocol metadata.
+radio reset/bootloader GPIO and polarity, and firmware protocol metadata. A
+production driver may also override `default_catalogue_url()` with its canonical
+HTTPS catalogue endpoint; return `nullptr` (the base default) when firmware
+metadata is unavailable. The bridge never embeds board- or vendor-specific URLs.
 
 - `UartModeId::TWO_WIRE`: only TX and RX; RTS/CTS pins are -1 if both stages
   use two-wire. No RTS/CTS handshaking.
@@ -39,7 +42,10 @@ See [UART modes](uart_modes.md) for strategy examples and transition details.
    validation and compile checks to CI for the new driver.
 7. If firmware flashing is supported, implement or select a **separate host
    protocol tool**. Never send Gecko XMODEM to a different radio/bootloader.
-8. Test hardware reset, bootloader entry, timeout recovery, and TCP reconnect
+8. If the board provides firmware updates, implement `default_catalogue_url()`
+   in its concrete driver and verify the catalogue selects the right board and
+   radio manifest. Users can still override it with YAML or an HA manifest URL.
+9. Test hardware reset, bootloader entry, timeout recovery, and TCP reconnect
    with the target radio, including a failed flash and power-cycle recovery.
 
 ## Driver selected from YAML

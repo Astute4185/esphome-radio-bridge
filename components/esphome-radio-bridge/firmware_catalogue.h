@@ -26,20 +26,48 @@ inline bool is_https_url(const std::string& url) {
   return url.find('#') == std::string::npos;
 }
 
-// Catalogue entries are paths relative to catalogue.json. No host/scheme changes are allowed.
+// YAML takes precedence, then the selected driver's canonical URL. Drivers
+// without firmware support can return nullptr and require an explicit override.
+inline std::string select_catalogue_url(const std::string& configured_url, const char* driver_default) {
+  if (!configured_url.empty()) return configured_url;
+  return driver_default != nullptr ? driver_default : "";
+}
+
+// Resolve catalogue entries without assuming where the catalogue lives in the repository.
+// An unprefixed entry may include directory segments already present in the catalogue URL
+// (e.g. "firmware/..."); the longest complete segment overlap is used once. A leading
+// "./" explicitly means catalogue-directory-relative, even if directories repeat.
+// Entries cannot change the HTTPS origin or traverse into parent directories.
 inline bool resolve_manifest_url(const std::string& catalogue_url, const std::string& path,
                                  std::string& resolved) {
   if (!is_https_url(catalogue_url) || path.empty() || path.front() == '/' || path.size() > 512 ||
       path.find("..") != std::string::npos || path.find(":") != std::string::npos ||
       path.find('?') != std::string::npos || path.find('#') != std::string::npos ||
-      path.find('\\') != std::string::npos)
+      path.find('\\') != std::string::npos || path.find('%') != std::string::npos)
     return false;
   for (char c : path) {
     if (static_cast<unsigned char>(c) <= 32 || static_cast<unsigned char>(c) >= 127) return false;
   }
   const auto slash = catalogue_url.rfind('/');
   if (slash == std::string::npos || slash < sizeof("https://") - 1) return false;
-  resolved = catalogue_url.substr(0, slash + 1) + path;
+  const std::string directory = catalogue_url.substr(0, slash + 1);
+
+  if (path.compare(0, 2, "./") == 0) {
+    if (path.size() == 2) return false;
+    resolved = directory + path.substr(2);
+  } else {
+    size_t overlap = 0;
+    // Match only whole path segments. This works for raw GitHub URLs, GitHub
+    // branch/tag paths and other HTTPS hosting without knowing their structure.
+    auto separator = directory.find('/', sizeof("https://") - 1);
+    while (separator != std::string::npos) {
+      const std::string suffix = directory.substr(separator + 1);
+      if (!suffix.empty() && suffix.size() > overlap && path.compare(0, suffix.size(), suffix) == 0)
+        overlap = suffix.size();
+      separator = directory.find('/', separator + 1);
+    }
+    resolved = directory + path.substr(overlap);
+  }
   return is_https_url(resolved);
 }
 
@@ -90,28 +118,53 @@ struct FirmwareLoadResult {
   std::vector<FirmwareRelease> versions;
 };
 
-// Data validation is independent of JSON and HTTP and can be unit-tested natively.
-inline bool valid_release(const FirmwareRelease& release) {
-  return valid_firmware_version(release.firmware_version) && !release.radio_version.empty() &&
-         release.radio_version.size() <= 64 && valid_sha256(release.sha256) &&
-         is_github_release_url(release.file) &&
-         (release.release_type == "beta" || release.release_type == "candidate" ||
-          release.release_type == "release");
+// The manifest's `latest` is a release identifier, not the radio stack version.
+// Display the matching release's `radio_version` in Home Assistant while
+// retaining the release identifier for update assessment and flashing.
+inline std::string latest_radio_version(const FirmwareLoadResult& metadata) {
+  if (metadata.latest.empty()) return "None";
+  for (const auto& release : metadata.versions)
+    if (release.firmware_version == metadata.latest) return release.radio_version;
+  return "Unknown";
 }
 
-inline bool valid_manifest_metadata(const FirmwareLoadResult& metadata) {
-  if (metadata.latest.empty() != metadata.versions.empty()) return false;
-  if (!metadata.latest.empty() && !valid_firmware_version(metadata.latest)) return false;
+// Data validation is independent of JSON and HTTP and can be unit-tested natively.
+inline const char* release_validation_error(const FirmwareRelease& release) {
+  if (!valid_firmware_version(release.firmware_version)) return "Invalid firmware_version";
+  if (release.radio_version.empty() || release.radio_version.size() > 64) return "Invalid radio_version";
+  if (!valid_sha256(release.sha256)) return "Invalid sha256 (expected 64 hexadecimal characters)";
+  if (!is_github_release_url(release.file)) return "Invalid file (expected HTTPS GitHub Release URL)";
+  if (release.release_type != "beta" && release.release_type != "candidate" &&
+      release.release_type != "release")
+    return "Invalid release_type (expected beta, candidate or release)";
+  return nullptr;
+}
+
+inline bool valid_release(const FirmwareRelease& release) {
+  return release_validation_error(release) == nullptr;
+}
+
+inline const char* manifest_validation_error(const FirmwareLoadResult& metadata) {
+  if (metadata.latest.empty() != metadata.versions.empty())
+    return "Manifest latest and versions are inconsistent";
+  if (!metadata.latest.empty() && !valid_firmware_version(metadata.latest))
+    return "Invalid latest firmware version";
   bool latest_found = metadata.latest.empty();
   for (size_t i = 0; i < metadata.versions.size(); ++i) {
     const auto& release = metadata.versions[i];
-    if (!valid_release(release)) return false;
+    if (const char* reason = release_validation_error(release); reason != nullptr) return reason;
     if (release.firmware_version == metadata.latest) latest_found = true;
     for (size_t j = 0; j < i; ++j) {
-      if (metadata.versions[j].firmware_version == release.firmware_version) return false;
+      if (metadata.versions[j].firmware_version == release.firmware_version)
+        return "Duplicate firmware_version in versions";
     }
   }
-  return latest_found;
+  if (!latest_found) return "Manifest latest does not match a published firmware_version";
+  return nullptr;
+}
+
+inline bool valid_manifest_metadata(const FirmwareLoadResult& metadata) {
+  return manifest_validation_error(metadata) == nullptr;
 }
 
 // Worker task never touches the UART or any ESPHome entity; the main loop owns published state.

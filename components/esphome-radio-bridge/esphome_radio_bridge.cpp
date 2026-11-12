@@ -18,6 +18,11 @@ namespace esphome::esphome_radio_bridge {
 
 static const char* const TAG = "esphome_radio_bridge";
 
+std::string RadioBridge::effective_catalogue_url_() const {
+  const char* driver_default = driver_ != nullptr ? driver_->default_catalogue_url() : nullptr;
+  return firmware::select_catalogue_url(catalogue_url_, driver_default);
+}
+
 void RadioBridge::setup() {
   this->publish_bridge_health_(BridgeHealth::STARTING);
   if (manifest_override_text_ != nullptr) manifest_override_text_->restore_override();
@@ -60,7 +65,10 @@ void RadioBridge::dump_config() {
   const auto& board = driver_->profile();
   ESP_LOGCONFIG(TAG, "  Board driver: %s", board.id);
   ESP_LOGCONFIG(TAG, "  TCP port: %u", tcp_port_);
-  ESP_LOGCONFIG(TAG, "  Catalogue URL: %s", catalogue_url_.c_str());
+  const auto catalogue_url = this->effective_catalogue_url_();
+  ESP_LOGCONFIG(TAG, "  Catalogue URL: %s", catalogue_url.empty() ? "Not configured" : catalogue_url.c_str());
+  ESP_LOGCONFIG(TAG, "  Catalogue source: %s",
+                catalogue_url_.empty() ? "Board driver default" : "YAML override");
   ESP_LOGCONFIG(TAG, "  Firmware channel: %s", board.radio_type);
   ESP_LOGCONFIG(TAG, "  Flash protocol: %s",
                 driver_->flash_protocol() != nullptr ? "Available" : "Unsupported");
@@ -194,7 +202,7 @@ void RadioBridge::enter_bootloader() {
   }
   if (!this->configure_uart_(Mode::BOOTLOADER)) {
     if (!this->configure_uart_(Mode::NORMAL))
-      this->report_error_("RTS/CTS recovery failed after bootloader UART error");
+      this->report_error_("UART mode recovery failed after bootloader UART error");
     return;
   }
   if (!driver_->enter_bootloader()) {
@@ -215,14 +223,14 @@ void RadioBridge::exit_bootloader() {
     return;
   }
   if (!driver_->exit_bootloader() || !this->configure_uart_(Mode::NORMAL)) {
-    this->report_error_("Radio application reset or RTS/CTS restoration failed");
+    this->report_error_("Radio application reset or UART mode restoration failed");
     return;
   }
   armed_ = false;
   if (armed_switch_ != nullptr) armed_switch_->turn_off();
   this->begin_radio_identification_();
   this->update_bridge_health_(network::is_connected());
-  ESP_LOGI(TAG, "Radio application reset and RTS/CTS restored");
+  ESP_LOGI(TAG, "Radio application reset and normal UART mode restored");
 }
 
 void RadioBridge::publish_mode_() {
@@ -463,7 +471,7 @@ void RadioBridge::publish_update_assessment_() {
     return;
   }
   if (latest_firmware_sensor_ != nullptr) {
-    const std::string latest = catalogue_result_.latest.empty() ? "None" : catalogue_result_.latest;
+    const std::string latest = firmware::latest_radio_version(catalogue_result_);
     if (!latest_firmware_sensor_->has_state() || latest_firmware_sensor_->state != latest)
       latest_firmware_sensor_->publish_state(latest);
   }
@@ -484,7 +492,8 @@ void RadioBridge::publish_update_assessment_() {
 
 void RadioBridge::check_for_updates_if_due_() {
   // Network-only metadata checks must never take ownership of the radio UART.
-  if (http_request_ == nullptr || (catalogue_url_.empty() && manifest_override_url_.empty()) ||
+  if (http_request_ == nullptr ||
+      (this->effective_catalogue_url_().empty() && manifest_override_url_.empty()) ||
       !network::is_connected() || catalogue_.busy())
     return;
   if (firmware::update_check_due(has_update_check_attempt_, millis(), last_update_check_ms_,
@@ -493,8 +502,9 @@ void RadioBridge::check_for_updates_if_due_() {
 }
 
 void RadioBridge::refresh_catalogue() {
+  const auto catalogue_url = this->effective_catalogue_url_();
   if (driver_ == nullptr || http_request_ == nullptr ||
-      (catalogue_url_.empty() && manifest_override_url_.empty())) {
+      (catalogue_url.empty() && manifest_override_url_.empty())) {
     this->publish_catalogue_status_("Error: catalogue not configured");
     return;
   }
@@ -510,7 +520,7 @@ void RadioBridge::refresh_catalogue() {
   last_update_check_ms_ = millis();
   last_update_check_succeeded_ = false;  // A failed launch retries after the backoff.
   const auto& board = driver_->profile();
-  if (!catalogue_.start(http_request_, catalogue_url_, manifest_override_url_, board.id, board.radio_type)) {
+  if (!catalogue_.start(http_request_, catalogue_url, manifest_override_url_, board.id, board.radio_type)) {
     this->publish_catalogue_status_("Error: unable to start catalogue request");
     return;
   }
