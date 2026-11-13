@@ -37,6 +37,8 @@ class GeckoXmodem final : public FlashProtocol {
     tx_offset_ = 0;
     menu_progress_ = 0;
     pending_menu_choice_ = false;
+    menu_request_sent_ = false;
+    last_menu_request_ms_ = now_ms;
     completion_text_.clear();
     error_.clear();
     state_ = State::WAIT_MENU;
@@ -70,6 +72,22 @@ class GeckoXmodem final : public FlashProtocol {
       if (sent == 0) return;
       pending_menu_choice_ = false;
     }
+    // Gecko standalone UART bootloaders may remain silent until the host sends
+    // carriage return.  Request the menu on entry and periodically retry in
+    // case the first CR was sent before the bootloader finished resetting.
+    if (state_ == State::WAIT_MENU &&
+        (!menu_request_sent_ || static_cast<uint32_t>(now_ms - last_menu_request_ms_) >= 3000)) {
+      constexpr uint8_t cr = '\r';
+      const int sent = uart.write(&cr, 1);
+      if (sent < 0 || sent > 1) {
+        fail_("Bootloader menu request UART write failed");
+        return;
+      }
+      if (sent == 1) {
+        menu_request_sent_ = true;
+        last_menu_request_ms_ = now_ms;
+      }
+    }
     uint8_t received[256];
     if (state_ == State::WAIT_MENU || state_ == State::WAIT_C || state_ == State::WAIT_ACK ||
         state_ == State::WAIT_EOT_ACK || state_ == State::WAIT_COMPLETE) {
@@ -91,6 +109,12 @@ class GeckoXmodem final : public FlashProtocol {
     if (static_cast<uint32_t>(now_ms - started_ms_) >= timeout) {
       if (state_ == State::WAIT_ACK || state_ == State::WAIT_EOT_ACK)
         retry_(now_ms);
+      else if (state_ == State::WAIT_MENU)
+        fail_("Bootloader menu timed out (no BL > prompt)");
+      else if (state_ == State::WAIT_C)
+        fail_("Bootloader XMODEM start timed out (no C)");
+      else if (state_ == State::WAIT_COMPLETE)
+        fail_("Bootloader completion timed out (no BL > prompt)");
       else
         fail_("Bootloader response timed out");
       return;
@@ -248,6 +272,8 @@ class GeckoXmodem final : public FlashProtocol {
   size_t tx_offset_{0};
   uint8_t menu_progress_{0};
   bool pending_menu_choice_{false};
+  bool menu_request_sent_{false};
+  uint32_t last_menu_request_ms_{0};
   unsigned attempts_{0};
   uint32_t started_ms_{0};
   State state_{State::IDLE};
