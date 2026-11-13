@@ -26,8 +26,8 @@
 | BOOTLOADER | Driver's boot mode | Boot/reset/baud | Flash client |
 | RECOVERY | Restore normal mode | Bootloader exit | Disconnect stale client |
 
-MGM210 2023 POC uses **two-wire → two-wire → two-wire**; the later RTS/CTS
-migration will use **four-wire → two-wire → four-wire**. Other verified drivers
+MGM210 PoE 2023 uses **four-wire → two-wire → four-wire**, with hardware
+RTS/CTS in normal NCP mode and two-wire Gecko bootloader access. Other verified drivers
 can use two-wire-only, four-wire-only, or mixed stage profiles.
 
 A failed bootloader transition attempts recovery. Mode restoration is always
@@ -66,5 +66,6 @@ arbitrary UART flow-control toggle.
   It is not a generic USB-to-UART serial integration or a Thread border router.
 - TCP port 6638 is a raw, unauthenticated serial endpoint: restrict network
   access. ESPHome API button controls must also be protected.
-- The MGM210 POC uses the existing two-wire NCP firmware. Four-wire operation
-  will require a matching RTS/CTS-enabled NCP image when enabled later.
+- MGM210 normal-mode four-wire communication requires a matching EFR32 NCP
+  image with CTS routed to PD02 and RTS routed to PC01; a two-wire-only NCP
+  image will not communicate with the production driver configuration.

@@ -62,11 +62,13 @@ repository root. For copyable working files located in `examples/`, see
 `examples/tubeszb-minimal.yaml` or `examples/tubeszb-mgm210-poe-2023.yaml`.
 These import the same reusable LAN8720 baseboard package.
 
-**TubesZB two-wire POC:** The MGM210 driver currently selects **two-wire TX/RX**
-for both the NCP application and Gecko bootloader. Its existing two-wire NCP
-firmware can therefore be used without reflashing the EFR32 first. The GPIO2/13
-RTS/CTS mapping and reusable four-wire UART strategy are retained for the later
-four-wire migration. Preserve a physical recovery route before deploying.
+**TubesZB four-wire default:** The MGM210PA32JIA driver now uses **hardware
+RTS/CTS for its normal NCP application**, with ESP32 GPIO2 RTS connected to
+EFR32 PD02 CTS and EFR32 PC01 RTS connected to ESP32 GPIO13 CTS. The installed
+EFR32 firmware must enable that same routing. The Gecko bootloader retains
+**two-wire TX/RX** for firmware recovery. Existing two-wire-only NCP images
+are incompatible with the normal-mode configuration. Preserve a physical
+recovery route before deploying.
 
 ## EFR32 firmware flashing prerequisites
 
@@ -158,15 +160,19 @@ docs/
 | TCP streaming and maintenance permissions | Independent of UART wiring | Gateway core |
 | GBL XMODEM flashing | Gecko-specific | ESP32 flash protocol or host recovery tool |
 
-For `tubeszb_mgm210_poe_2023` during the POC, **normal = 2-wire TX/RX** and
-**Gecko bootloader = 2-wire TX/RX**. Four-wire remains supported by the reusable
-UART strategy and may be selected by the board driver after the NCP firmware is upgraded. Drivers supporting 4-wire
+For `tubeszb_mgm210_poe_2023`, **normal = 4-wire RTS/CTS** and **Gecko
+bootloader = 2-wire TX/RX**. Other drivers can choose two-wire-only signalling
+if their hardware requires it. Drivers supporting 4-wire
 in either stage must provide valid RTS/CTS pins. Modes cannot be overridden
 from user YAML, avoiding hardware-specific configuration leaks.
 
 The ESP-IDF adapter retains physical UART signal assignments across a
 4-wire-to-2-wire transition; it disables hardware handshaking in two-wire
 mode. See [UART modes](docs/uart_modes.md) for the signalling caveat.
+
+The confirmed TubesZB PoE 2023 connections are **ESP32 GPIO2 RTS -> EFR32
+PD02 CTS** and **EFR32 PC01 RTS -> ESP32 GPIO13 CTS**. An NCP image built with
+EFR32 RTS assigned to PC02 will not use the required physical signal path.
 
 There are no user-facing flow-control toggles or direct GPIO switches. Only
 one TCP client owns the serial port at a time. Flashing requires the

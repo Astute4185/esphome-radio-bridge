@@ -136,3 +136,24 @@ acceptance tests.
 See also the official ESPHome documentation for [custom ESP32 partitions](https://esphome.io/components/esp32/),
 [HTTP Request](https://esphome.io/components/http_request/) and
 [OTA partition-table updates](https://esphome.io/components/ota/esphome/).
+
+## Gecko bootloader handshake and timeouts
+
+The board driver switches the UART to its bootloader configuration (normally
+115200 baud, 8N1, with RTS/CTS disabled) and toggles BOOT/RESET. The Gecko
+XMODEM protocol then sends carriage return (`\r`) to request the standalone
+bootloader menu, retrying every three seconds if the initial request was lost
+during radio reset. It waits for `BL >` before sending the ASCII `1` upload
+command, and then waits for the bootloader's `C` to begin XMODEM-CRC.
+
+The status sensor distinguishes three different timeouts:
+
+- `Bootloader menu timed out (no BL > prompt)`: check BOOT/RESET entry,
+  the bootloader's UART pinout, baud rate and two-wire UART readiness.
+- `Bootloader XMODEM start timed out (no C)`: the menu was received and
+  the upload command sent, but the bootloader did not start XMODEM.
+- `Bootloader completion timed out (no BL > prompt)`: XMODEM transfer
+  reached EOT ACK but the bootloader never confirmed installation.
+
+These are bootloader transport diagnostics, not confirmation of the selected
+EFR32 application firmware's normal-mode RTS/CTS pin mapping.

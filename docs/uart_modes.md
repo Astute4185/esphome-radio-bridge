@@ -31,6 +31,30 @@ normal_uart_mode = UartModeId::TWO_WIRE;
 bootloader_uart_mode = UartModeId::TWO_WIRE;
 ```
 
+### TubesZB MGM210 PoE (2023): verified hardware mapping
+
+On this board, silkscreen/physical module pad labels must not be substituted
+for UART signal directions. Confirmed continuity measurements:
+
+| ESP32 UART1 | GPIO / ESP32 module pad | MGM210PA32JIA signal / module pad |
+| --- | --- | --- |
+| TX (output) | GPIO4 | PA05 RX (input) |
+| RX (input) | GPIO36 | PA06 TX (output) |
+| RTS (output) | GPIO2 / pad 24 | PD02 CTS (input) / pad 17 |
+| CTS (input) | GPIO13 / pad 16 | PC01 RTS (output) / pad 22 |
+
+The Zigbee NCP image must enable USART0 hardware CTS/RTS with
+`SL_IOSTREAM_USART_VCOM_CTS_PORT=SL_GPIO_PORT_D`, `CTS_PIN=2`,
+`SL_IOSTREAM_USART_VCOM_RTS_PORT=SL_GPIO_PORT_C`, and `RTS_PIN=1`.
+An older experiment incorrectly set RTS to PC02. Rebuilding the ESP32
+application does **not** correct the EFR32 firmware's pin assignments.
+
+The Gecko serial bootloader stays at **115200 baud, two-wire TX/RX** so
+recovery and subsequent GBL uploads do not depend on application RTS/CTS.
+The driver sets normal mode to `FOUR_WIRE` and bootloader mode to
+`TWO_WIRE`; the experimental runtime selector is not part of the
+production driver.
+
 If **either** stage requires four-wire, RTS/CTS pins and an RX threshold must
 be supplied and validated. A two-wire-only profile uses RTS=CTS=-1 and
 threshold=0. `static_assert(valid_profile(PROFILE))` rejects pin overlap and

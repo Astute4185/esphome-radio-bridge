@@ -1,6 +1,7 @@
 # Full version derived from the user's working ESPHome 2026.10.1 config.
-# POC: driver selects 2-wire UART for both normal application and Gecko bootloader.
-# Existing 2-wire NCP firmware works without RTS/CTS. Keep the 4-wire migration for later.
+# Driver selects 4-wire RTS/CTS for the normal NCP and 2-wire for the Gecko bootloader.
+# EFR32 NCP firmware must use PD02 CTS and PC01 RTS for the verified board wiring.
+# ESP32 RTS GPIO2 -> EFR32 PD02 CTS; ESP32 CTS GPIO13 <- EFR32 PC01 RTS.
 substitutions:
   deviceid: tubeszb-efr32-mgm210-poe-2023
   devicename: TubesZB Zigbee Coordinator

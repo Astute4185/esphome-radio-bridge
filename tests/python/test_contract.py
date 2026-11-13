@@ -49,8 +49,8 @@ def test_external_component_layout():
 def test_board_specific_mapping_is_isolated():
     board = (COMPONENT / "tubeszb_mgm210_poe_2023_profile.h").read_text()
     assert re.search(r"\b1,\s*4,\s*36,\s*2,\s*13,\s*122", board)
-    # POC uses the existing two-wire NCP image; physical RTS/CTS pin mapping is retained.
-    assert re.search(r"UartModeId::TWO_WIRE,\s*// normal mode", board)
+    # Production driver uses verified 4-wire normal mode and 2-wire Gecko bootloader.
+    assert re.search(r"UartModeId::FOUR_WIRE,\s*// normal mode", board)
     assert re.search(r"UartModeId::TWO_WIRE,\s*// bootloader mode", board)
     assert re.search(r"\b5,\s*16,\s*// RESET", board)
     core = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
