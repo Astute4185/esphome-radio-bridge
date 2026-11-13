@@ -14,9 +14,8 @@ esphome:
 
 packages:
   board_network: !include ../packages/esp32-wrover-lan8720.yaml
-  # Radio flashing requires a dedicated partition. Add the staging package only
-  # when installing the ESP32 partition table by serial/USB flashing.
-  # flash_staging: !include ../packages/radio-flash-staging.yaml
+  # The radio driver registers radio_fw automatically when flash_firmware is enabled.
+  # Existing devices still require a separate partition-table upload (or serial flash).
 
 external_components:
   - source:
@@ -35,15 +34,22 @@ api:
 
 ota:
   - platform: esphome
+    allow_partition_access: true  # Required for a separate OTA partition-table upload.
   - platform: web_server
 
 web_server:
   port: 80
   version: 2
 
+# Firmware assets on GitHub Releases redirect to very long signed URLs.
+# The default 512-byte transmit buffer fails with HTTP_CLIENT: Out of buffer.
 http_request:
   verify_ssl: true
   follow_redirects: true
+  redirect_limit: 5
+  buffer_size_tx: 4096
+  buffer_size_rx: 1024
+  timeout: 15s
 
 esphome-radio-bridge:
   # catalogue_url is optional: the selected driver supplies its default.
@@ -57,6 +63,7 @@ esphome-radio-bridge:
     name: EFR32 Check for Updates
   latest_firmware:
     name: EFR32 Latest Firmware
+  # Configuring this button makes the driver add a 512 KiB radio_fw partition.
   flash_firmware:
     name: EFR32 Update Firmware
   firmware_update_status:

@@ -62,10 +62,44 @@ repository root. For copyable working files located in `examples/`, see
 `examples/tubeszb-minimal.yaml` or `examples/tubeszb-mgm210-poe-2023.yaml`.
 These import the same reusable LAN8720 baseboard package.
 
-**Prerequisites:** Confirm GPIO2/13 represent the actual ESP32 RTS/CTS pins on
-your device. The MGM210 driver mandates **four-wire normal mode** and **two-wire Gecko
-bootloader mode**. Its NCP firmware MUST support hardware RTS/CTS. Your earlier
-two-wire NCP image is not compatible with that MGM210 driver configuration. Preserve a physical recovery route before deployment.
+**TubesZB two-wire POC:** The MGM210 driver currently selects **two-wire TX/RX**
+for both the NCP application and Gecko bootloader. Its existing two-wire NCP
+firmware can therefore be used without reflashing the EFR32 first. The GPIO2/13
+RTS/CTS mapping and reusable four-wire UART strategy are retained for the later
+four-wire migration. Preserve a physical recovery route before deploying.
+
+## EFR32 firmware flashing prerequisites
+
+The **full example** now includes the HTTP settings proven on hardware:
+
+```yaml
+http_request:
+  verify_ssl: true
+  follow_redirects: true
+  redirect_limit: 5
+  buffer_size_tx: 4096  # GitHub Release redirects exceed the 512-byte default.
+  buffer_size_rx: 1024
+  timeout: 15s
+
+ota:
+  - platform: esphome
+    allow_partition_access: true
+```
+
+When `flash_firmware:` is configured, the TubesZB driver **automatically adds**
+the 512 KiB `radio_fw` ESP32 staging partition to the generated build. It stores
+and verifies the entire `.gbl` before changing the radio firmware. Normal
+firmware-monitoring-only configs don't need this partition. The HTTP transmit
+buffer remains an explicit `http_request` setting and is validated at build
+time for flash-enabled configs; the shared ESPHome HTTP client isn't silently
+reconfigured by the bridge.
+
+**A normal application OTA does not update a previously installed ESP32
+partition table.** For existing ESP32 devices, separately upload the new
+partition table via ESPHome CLI (`esphome upload --partition-table`) with
+`ota.allow_partition_access: true`, or flash via USB/serial. See
+[firmware flashing and Docker instructions](docs/firmware_flashing.md) for
+commands and recovery risks.
 
 ## How to reuse it for other modules
 
@@ -122,11 +156,11 @@ docs/
 | Bootloader | Independently selected by driver | UART mode strategy |
 | Reset and bootloader sequencing | Radio-specific | Board driver |
 | TCP streaming and maintenance permissions | Independent of UART wiring | Gateway core |
-| GBL XMODEM flashing | Gecko-specific | Host flasher |
+| GBL XMODEM flashing | Gecko-specific | ESP32 flash protocol or host recovery tool |
 
-For `tubeszb_mgm210_poe_2023`, **normal = 4-wire RTS/CTS** and **Gecko
-bootloader = 2-wire TX/RX**. A second radio can specify normal = 2-wire and
-bootloader = 2-wire, without wiring RTS/CTS at all. Drivers supporting 4-wire
+For `tubeszb_mgm210_poe_2023` during the POC, **normal = 2-wire TX/RX** and
+**Gecko bootloader = 2-wire TX/RX**. Four-wire remains supported by the reusable
+UART strategy and may be selected by the board driver after the NCP firmware is upgraded. Drivers supporting 4-wire
 in either stage must provide valid RTS/CTS pins. Modes cannot be overridden
 from user YAML, avoiding hardware-specific configuration leaks.
 
@@ -199,8 +233,9 @@ bootloaders just because they connect over the same TCP bridge.
   strategies, board profile variations and Gecko protocol simulation.
 - Full ESPHome code generation, ESP-IDF compilation and physical UART/bootloader
   acceptance tests must pass before deploying to your live ZHA coordinator.
-- Automated version identification, on-device manifest downloads, progress
-  entities and radio-type autodetection are **not yet implemented**.
+- Radio version identification, manifest loading, periodic update checks and
+  on-device flashing now have code and host tests; end-to-end flashing still
+  requires hardware acceptance testing on each supported board/firmware image.
 - Port 6638 is raw TCP UART. It has no independent authentication. Firewall or
   isolate the gateway to a trusted network segment; restrict HA maintenance
   button access and do not expose the web interface without authentication.

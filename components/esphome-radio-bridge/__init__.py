@@ -6,13 +6,24 @@ bootloader handling. Firmware catalogue support is optional and radio agnostic.
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import binary_sensor, button, http_request, sensor, switch, text, text_sensor
+import esphome.final_validate as fv
+from esphome.components import (
+    binary_sensor,
+    button,
+    esp32,
+    http_request,
+    sensor,
+    switch,
+    text,
+    text_sensor,
+)
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CONNECTIVITY,
     ENTITY_CATEGORY_CONFIG,
     ENTITY_CATEGORY_DIAGNOSTIC,
 )
+from esphome.core import CORE
 
 DOMAIN = "esphome-radio-bridge"
 DEPENDENCIES = ["esp32", "network"]
@@ -57,6 +68,14 @@ CONF_LATEST_FIRMWARE = "latest_firmware"
 CONF_UPDATE_AVAILABLE = "update_available"
 CONF_FLASH_FIRMWARE = "flash_firmware"
 CONF_FIRMWARE_UPDATE_STATUS = "firmware_update_status"
+
+# Board-specific staging requirements are registered only when an on-device
+# firmware flash button is configured. Other drivers can provide their own
+# requirements without changing the generic bridge or its UART implementation.
+FLASH_STAGING = {
+    "tubeszb_mgm210_poe_2023": ("radio_fw", "data", "undefined", 0x80000),
+}
+MIN_FIRMWARE_HTTP_TX_BUFFER = 4096
 
 
 def secure_url(value):
@@ -167,7 +186,54 @@ CONFIG_SCHEMA = cv.All(
 )
 
 
+def _register_flash_partition(config):
+    if CONF_FLASH_FIRMWARE not in config:
+        return
+    partition_spec = FLASH_STAGING.get(config[CONF_DRIVER])
+    if partition_spec is None:
+        return
+    esp32_partitions = CORE.config.get("esp32", {}).get("partitions")
+    if isinstance(esp32_partitions, list):
+        # Keep existing user configurations compatible when migrating to the
+        # driver-managed partition. ESPHome validates custom partition entries.
+        if any(item.get("name") == partition_spec[0] for item in esp32_partitions):
+            return
+    elif esp32_partitions is not None:
+        raise cv.Invalid(
+            "A custom ESP32 partition CSV is configured. Include a 512 KiB "
+            "radio_fw data partition in that CSV for firmware flashing."
+        )
+    esp32.add_partition(*partition_spec)
+
+
+def _validate_firmware_http_request(config):
+    if CONF_FLASH_FIRMWARE not in config:
+        return
+    request_config = fv.full_config.get().get("http_request") or {}
+    if request_config.get("buffer_size_tx", 512) < MIN_FIRMWARE_HTTP_TX_BUFFER:
+        raise cv.Invalid(
+            "On-device firmware flashing requires "
+            "http_request.buffer_size_tx: 4096 or greater to handle "
+            "GitHub Release redirects",
+            path=[CONF_FLASH_FIRMWARE],
+        )
+    if request_config.get("follow_redirects", True) is False:
+        raise cv.Invalid(
+            "On-device firmware flashing requires http_request.follow_redirects: true",
+            path=[CONF_FLASH_FIRMWARE],
+        )
+    if request_config.get("verify_ssl", True) is False:
+        raise cv.Invalid(
+            "On-device firmware flashing requires http_request.verify_ssl: true",
+            path=[CONF_FLASH_FIRMWARE],
+        )
+
+
+FINAL_VALIDATE_SCHEMA = _validate_firmware_http_request
+
+
 async def to_code(config):
+    _register_flash_partition(config)
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     cg.add(var.set_board_model(getattr(BoardModel, config[CONF_DRIVER].upper())))

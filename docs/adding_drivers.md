@@ -40,8 +40,11 @@ See [UART modes](uart_modes.md) for strategy examples and transition details.
    name to `BoardModel`.
 6. Add a dedicated example and C++ UART/profile/policy tests. Add config-only
    validation and compile checks to CI for the new driver.
-7. If firmware flashing is supported, implement or select a **separate host
-   protocol tool**. Never send Gecko XMODEM to a different radio/bootloader.
+7. If on-device firmware flashing is supported, select the driver's flash
+   protocol and declare its staging requirements in the Python `FLASH_STAGING`
+   mapping. The existing Gecko XMODEM backend is specific to EFR32 bootloaders;
+   other radios need their own protocol adapter. Host flashing tools remain
+   available for recovery and development.
 8. If the board provides firmware updates, implement `default_catalogue_url()`
    in its concrete driver and verify the catalogue selects the right board and
    radio manifest. Users can still override it with YAML or an HA manifest URL.
@@ -58,8 +61,8 @@ esphome-radio-bridge:
 
 There is intentionally **no `uart_mode`, `rts_pin`, `cts_pin`, or
 `hardware_flow_control` YAML option**. The driver owns signalling choices.
-A two-wire-only driver is supported; the MGM210 driver still requires
-four-wire normal operation.
+A two-wire-only driver is supported. The MGM210 POC currently uses two-wire
+normal and two-wire bootloader UART, pending the later four-wire migration.
 
 ## Same ESP32 network board, different radio
 
@@ -98,4 +101,7 @@ manual probe is refused while a TCP client is connected or maintenance is
 active. This avoids interrupting ZHA. The driver owns the wire protocol;
 future drivers can use a different protocol without changing the bridge.
 
-Firmware flashing remains a separate, board-gated capability.
+Firmware flashing remains a separate, board-gated capability. Flash-enabled
+configs must satisfy the HTTPS buffer and staging requirements documented in
+[firmware flashing](firmware_flashing.md); the driver automatically declares
+the needed partition when `flash_firmware:` is enabled.

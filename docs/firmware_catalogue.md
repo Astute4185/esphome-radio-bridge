@@ -34,9 +34,12 @@ version pointer and a `versions` array. Each release specifies `firmware_version
 this branch. `latest` must match one of the version entries. Empty manifests use
 `latest: null` and `versions: []`.
 
-For ESPHome 2026.10.2, HTTP requests run in a FreeRTOS worker task to keep UART and
-TCP handling responsive. TLS certificate verification is required; keep
-`http_request.verify_ssl: true` and disallow redirects for metadata.
+For ESPHome 2026.10.2, firmware metadata requests run in a FreeRTOS worker
+so UART and TCP handling remain responsive. Keep HTTPS certificate verification
+enabled. The raw GitHub catalogue and manifests typically do not redirect, but
+firmware binaries hosted in GitHub Releases **do**; `follow_redirects: true`
+and `buffer_size_tx: 4096` are therefore required by the on-device flasher.
+See [firmware flashing](firmware_flashing.md) for the validated HTTP settings.
 
 Security limits: at most 16 KiB per JSON document, 48 versions, and 255 characters
 for the persisted override. Schema validation rejects mismatched board/radio and
