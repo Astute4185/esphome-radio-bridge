@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "board_factory.h"
 #include "bridge_health.h"
@@ -11,6 +12,7 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/button/button.h"
 #include "esphome/components/http_request/http_request.h"
+#include "esphome/components/select/select.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/text/text.h"
@@ -21,12 +23,15 @@
 #include "firmware_downloader.h"
 #include "firmware_flash_diagnostics.h"
 #include "firmware_flash_policy.h"
+#include "firmware_release_cache.h"
+#include "firmware_release_selection.h"
 #include "firmware_update_monitor.h"
 #include "mode_policy.h"
 
 namespace esphome::esphome_radio_bridge {
 
 class ManifestOverrideText;
+class FirmwareVersionSelect;
 
 class RadioBridge : public Component {
  public:
@@ -43,6 +48,11 @@ class RadioBridge : public Component {
   void set_manifest_override_text(ManifestOverrideText* value) { manifest_override_text_ = value; }
   void set_catalogue_status_sensor(text_sensor::TextSensor* value) { catalogue_status_sensor_ = value; }
   void set_latest_firmware_sensor(text_sensor::TextSensor* value) { latest_firmware_sensor_ = value; }
+  void set_firmware_version_select(FirmwareVersionSelect* value) { firmware_version_select_ = value; }
+  bool set_firmware_version_choice(const std::string& label);
+  void set_firmware_version_status_sensor(text_sensor::TextSensor* value) {
+    firmware_version_status_sensor_ = value;
+  }
   void set_firmware_update_status_sensor(text_sensor::TextSensor* value) {
     firmware_update_status_sensor_ = value;
   }
@@ -95,6 +105,9 @@ class RadioBridge : public Component {
   void check_for_updates_if_due_();
   void publish_update_assessment_();
   void clear_update_entities_();
+  void refresh_firmware_choices_();
+  void publish_firmware_version_status_(const std::string& status);
+  uint64_t firmware_choices_source_key_() const;
   void publish_firmware_update_status_();
   void poll_firmware_flash_();
   void finish_firmware_flash_(bool success, const std::string& reason);
@@ -110,6 +123,12 @@ class RadioBridge : public Component {
   firmware::FirmwareFlashDiagnostics flash_diagnostics_{};
   uint32_t flash_source_epoch_{0};
   firmware::FirmwareLoadResult catalogue_result_{};
+  FirmwareVersionSelect* firmware_version_select_{nullptr};
+  text_sensor::TextSensor* firmware_version_status_sensor_{nullptr};
+  std::string firmware_version_status_{};
+  bool firmware_ha_reload_pending_{false};
+  bool component_setup_complete_{false};
+  std::string selected_release_id_{};
   http_request::HttpRequestComponent* http_request_{nullptr};
   ManifestOverrideText* manifest_override_text_{nullptr};
   text_sensor::TextSensor* catalogue_status_sensor_{nullptr};
@@ -158,6 +177,32 @@ class RadioBridge : public Component {
   text_sensor::TextSensor* installed_firmware_sensor_{nullptr};
   text_sensor::TextSensor* radio_identification_status_sensor_{nullptr};
   switch_::Switch* armed_switch_{nullptr};
+};
+
+// Options are rebuilt on every manifest load, including a custom override.
+// Options must outlive SelectTraits' borrowed string pointers.
+class FirmwareVersionSelect : public select::Select {
+ public:
+  explicit FirmwareVersionSelect(RadioBridge* parent) : parent_(parent) {}
+  void update_choices(const firmware::FirmwareLoadResult& metadata, const std::string& selected_release_id,
+                      uint64_t source_key);
+  std::string restore_cache(uint64_t source_key);
+  bool find_release_id(const std::string& label, std::string& release_id) const;
+  bool choices_changed(const firmware::FirmwareLoadResult& metadata) const;
+  size_t release_count() const { return choices_.empty() ? 0 : choices_.size() - 1; }
+  void save_selection(uint64_t source_key, const std::string& selected_release_id);
+
+ protected:
+  void control(const std::string& value) override;
+  RadioBridge* parent_;
+  std::vector<firmware::FirmwareChoice> choices_{};
+  ESPPreferenceObject pref_{};
+  uint64_t source_key_{0};
+  bool have_snapshot_{false};
+  bool pref_ready_{false};
+  std::string last_saved_selected_id_{};
+  std::vector<firmware::FirmwareChoice> last_saved_choices_{};
+  void set_choices_(std::vector<firmware::FirmwareChoice> choices, const std::string& selected_id);
 };
 
 class FlashFirmwareButton : public button::Button {

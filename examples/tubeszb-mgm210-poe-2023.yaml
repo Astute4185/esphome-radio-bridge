@@ -65,6 +65,13 @@ esphome-radio-bridge:
   latest_firmware:
     name: EFR32 Latest Firmware
   # Configuring this button makes the driver add a 512 KiB radio_fw partition.
+  # Release list is populated from the active manifest on each successful load.
+  firmware_version_select:
+    name: EFR32 Firmware Version
+  # Cached options appear on reboot; after a custom manifest change
+  # HA may require an ESPHome integration Reload to re-enumerate new options.
+  firmware_version_status:
+    name: EFR32 Firmware Version List Status
   flash_firmware:
     name: EFR32 Update Firmware
   firmware_update_status:

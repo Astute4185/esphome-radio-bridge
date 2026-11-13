@@ -26,6 +26,14 @@ std::string RadioBridge::effective_catalogue_url_() const {
 void RadioBridge::setup() {
   this->publish_bridge_health_(BridgeHealth::STARTING);
   if (manifest_override_text_ != nullptr) manifest_override_text_->restore_override();
+  // Restore previously verified *display options* before clients discover
+  // entities. Never use NVS-cached entries to authorize a firmware download.
+  if (firmware_version_select_ != nullptr) {
+    selected_release_id_ = firmware_version_select_->restore_cache(this->firmware_choices_source_key_());
+    this->publish_firmware_version_status_(firmware_version_select_->release_count() > 0
+                                               ? "Cached firmware choices; awaiting fresh manifest"
+                                               : "Awaiting firmware manifest");
+  }
   this->publish_catalogue_status_("Idle");
   this->publish_firmware_update_status_();
   if (driver_ == nullptr || !drivers::valid_profile(driver_->profile())) {
@@ -54,6 +62,7 @@ void RadioBridge::setup() {
   this->publish_mode_();
   this->begin_radio_identification_();
   this->update_bridge_health_(network::is_connected());
+  component_setup_complete_ = true;
 }
 
 void RadioBridge::dump_config() {
@@ -392,6 +401,9 @@ void RadioBridge::loop() {
       catalogue_result_ = std::move(completed);
       last_update_check_succeeded_ = catalogue_result_.ok;
       last_update_check_ms_ = millis();  // Count the interval from completion, not start.
+      this->refresh_firmware_choices_();
+      if (!catalogue_result_.ok && firmware_version_select_ != nullptr)
+        this->publish_firmware_version_status_("Manifest check failed; cached choices only");
       this->publish_update_assessment_();
       this->publish_catalogue_status_(catalogue_result_.ok ? catalogue_result_.message
                                                            : "Error: " + catalogue_result_.message);
@@ -450,8 +462,14 @@ bool RadioBridge::set_manifest_override_url(const std::string& url) {
   if (!url.empty() && !firmware::is_https_url(url)) return false;
   if (manifest_override_url_ == url) return true;
   manifest_override_url_ = url;
+  if (component_setup_complete_) firmware_ha_reload_pending_ = true;
   ++catalogue_source_epoch_;
   catalogue_result_ = {};
+  selected_release_id_.clear();
+  if (firmware_version_select_ != nullptr) {
+    selected_release_id_ = firmware_version_select_->restore_cache(this->firmware_choices_source_key_());
+    this->publish_firmware_version_status_("Source changed; waiting for manifest");
+  }
   has_update_check_attempt_ = false;  // Schedule an immediate check against the new source.
   this->clear_update_entities_();
   this->publish_catalogue_status_("Idle: source changed; refresh required");
@@ -508,6 +526,10 @@ void RadioBridge::refresh_catalogue() {
     this->publish_catalogue_status_("Error: catalogue not configured");
     return;
   }
+  if (flash_phase_ != FirmwareFlashPhase::IDLE) {
+    this->publish_catalogue_status_("Firmware flash in progress");
+    return;
+  }
   if (catalogue_.busy()) {
     this->publish_catalogue_status_("Loading");
     return;
@@ -551,6 +573,156 @@ void ManifestOverrideText::control(const std::string& value) {
   this->publish_state(value);
 }
 
+uint64_t RadioBridge::firmware_choices_source_key_() const {
+  const auto* board = driver_ != nullptr ? &driver_->profile() : nullptr;
+  return firmware::firmware_source_key(board != nullptr ? board->id : "",
+                                       board != nullptr ? board->radio_type : "",
+                                       this->effective_catalogue_url_(), manifest_override_url_);
+}
+
+void FirmwareVersionSelect::set_choices_(std::vector<firmware::FirmwareChoice> choices,
+                                         const std::string& selected_id) {
+  // SelectTraits holds borrowed char pointers in ESPHome 2026.10.2. Build
+  // pointers from durable choices_ storage; never from a temporary vector.
+  choices_ = std::move(choices);
+  FixedVector<const char*> options;
+  options.init(choices_.size());
+  for (const auto& choice : choices_) options.push_back(choice.label.c_str());
+  this->traits.set_options(options);
+  for (const auto& choice : choices_) {
+    if (choice.release_id == selected_id) {
+      this->publish_state(choice.label);
+      return;
+    }
+  }
+  this->publish_state("Latest");
+}
+
+std::string FirmwareVersionSelect::restore_cache(uint64_t source_key) {
+  if (!pref_ready_) {
+    pref_ = this->make_entity_preference<firmware::FirmwareChoicesSnapshot>(2);
+    pref_ready_ = true;
+  }
+  source_key_ = source_key;
+  firmware::FirmwareChoicesSnapshot stored{};
+  std::vector<firmware::FirmwareChoice> choices;
+  std::string selected_id;
+  if (pref_.load(&stored) &&
+      firmware::read_firmware_choices_snapshot(stored, source_key, choices, selected_id)) {
+    this->set_choices_(std::move(choices), selected_id);
+    last_saved_choices_ = choices_;
+    last_saved_selected_id_ = selected_id;
+    have_snapshot_ = true;
+    ESP_LOGI(TAG, "Restored %u firmware choices from NVS (selection: %s)",
+             static_cast<unsigned>(choices_.size()), this->current_option().c_str());
+    return selected_id;
+  }
+  have_snapshot_ = false;
+  last_saved_choices_.clear();
+  last_saved_selected_id_.clear();
+  this->set_choices_({{"Latest", ""}}, "");
+  return "";
+}
+
+void FirmwareVersionSelect::save_selection(uint64_t source_key, const std::string& selected_release_id) {
+  if (!have_snapshot_ || source_key != source_key_) return;
+  if (last_saved_selected_id_ == selected_release_id &&
+      firmware::same_firmware_choices(last_saved_choices_, choices_))
+    return;  // Avoid NVS wear on daily checks and unchanged selections.
+  firmware::FirmwareChoicesSnapshot saved{};
+  if (!firmware::make_firmware_choices_snapshot(choices_, source_key, selected_release_id, saved)) {
+    // Invalidate any older snapshot for this source, so the next boot cannot
+    // advertise a stale subset of releases when this manifest exceeds limits.
+    firmware::FirmwareChoicesSnapshot invalid{};
+    if (!pref_.save(&invalid)) ESP_LOGW(TAG, "Unable to invalidate outdated firmware choice cache");
+    last_saved_choices_ = choices_;
+    last_saved_selected_id_ = selected_release_id;
+    have_snapshot_ = false;
+    ESP_LOGW(TAG, "Firmware choices exceed NVS cache limits; live choices will still work");
+    return;
+  }
+  if (!pref_.save(&saved)) {
+    ESP_LOGW(TAG, "Unable to persist firmware dropdown options");
+    return;
+  }
+  last_saved_choices_ = choices_;
+  last_saved_selected_id_ = selected_release_id;
+}
+
+void FirmwareVersionSelect::update_choices(const firmware::FirmwareLoadResult& metadata,
+                                           const std::string& selected_release_id, uint64_t source_key) {
+  if (!metadata.ok || !firmware::valid_manifest_metadata(metadata)) return;
+  auto choices = firmware::firmware_choices(metadata);
+  const std::string selected =
+      firmware::firmware_choice_exists(choices, selected_release_id) ? selected_release_id : "";
+  source_key_ = source_key;
+  this->set_choices_(std::move(choices), selected);
+  // Cache options only from a validated network manifest, never from a failed
+  // request. Oversized manifests still work in RAM but are not cached.
+  have_snapshot_ = true;
+  this->save_selection(source_key, selected);
+}
+
+bool FirmwareVersionSelect::choices_changed(const firmware::FirmwareLoadResult& metadata) const {
+  return !firmware::same_firmware_choices(choices_, firmware::firmware_choices(metadata));
+}
+
+bool FirmwareVersionSelect::find_release_id(const std::string& label, std::string& release_id) const {
+  for (const auto& choice : choices_) {
+    if (choice.label == label) {
+      release_id = choice.release_id;
+      return true;
+    }
+  }
+  return false;
+}
+
+void FirmwareVersionSelect::control(const std::string& value) {
+  if (!parent_->set_firmware_version_choice(value)) {
+    const auto selected = this->current_option();
+    if (!selected.empty()) this->publish_state(selected.c_str());
+  }
+}
+
+bool RadioBridge::set_firmware_version_choice(const std::string& label) {
+  if (flash_phase_ != FirmwareFlashPhase::IDLE || catalogue_.busy() || firmware_version_select_ == nullptr)
+    return false;
+  std::string release_id;
+  if (!firmware_version_select_->find_release_id(label, release_id)) return false;
+  // A cached choice may be selected while offline, but it will not permit
+  // flashing until a fresh validated manifest supplies its release metadata.
+  selected_release_id_ = release_id;
+  firmware_version_select_->publish_state(label);
+  firmware_version_select_->save_selection(this->firmware_choices_source_key_(), selected_release_id_);
+  ESP_LOGI(TAG, "Selected firmware: %s", label.c_str());
+  return true;
+}
+
+void RadioBridge::publish_firmware_version_status_(const std::string& status) {
+  if (firmware_version_status_ == status) return;
+  firmware_version_status_ = status;
+  if (firmware_version_status_sensor_ != nullptr) firmware_version_status_sensor_->publish_state(status);
+}
+
+void RadioBridge::refresh_firmware_choices_() {
+  if (!catalogue_result_.ok || !firmware::valid_manifest_metadata(catalogue_result_))
+    return;  // Preserve cached options when GitHub is offline or request fails.
+  const auto choices = firmware::firmware_choices(catalogue_result_);
+  if (!firmware::firmware_choice_exists(choices, selected_release_id_)) {
+    ESP_LOGI(TAG, "Selected firmware no longer exists; resetting to Latest");
+    selected_release_id_.clear();
+  }
+  if (firmware_version_select_ != nullptr) {
+    firmware_ha_reload_pending_ |= firmware_version_select_->choices_changed(catalogue_result_);
+    firmware_version_select_->update_choices(catalogue_result_, selected_release_id_,
+                                             this->firmware_choices_source_key_());
+    const auto count = firmware_version_select_->release_count();
+    this->publish_firmware_version_status_(firmware_ha_reload_pending_
+                                               ? "Versions updated; reload HA ESPHome integration if needed"
+                                               : "Ready: " + std::to_string(count) + " firmware releases");
+  }
+}
+
 void RadioBridge::publish_firmware_update_status_() {
   const auto& status = flash_diagnostics_.status();
   if (reported_firmware_update_status_ == status) return;
@@ -580,12 +752,15 @@ void RadioBridge::flash_firmware() {
     this->publish_firmware_update_status_();
     return;
   }
-  const firmware::FirmwareRelease* release = firmware::select_latest_release(catalogue_result_);
+  const firmware::FirmwareRelease* release =
+      firmware::select_firmware_release(catalogue_result_, selected_release_id_);
   if (release == nullptr) {
-    flash_diagnostics_.failed("no valid firmware release selected");
+    flash_diagnostics_.failed("selected firmware release is unavailable");
     this->publish_firmware_update_status_();
     return;
   }
+  ESP_LOGI(TAG, "Firmware download selected: radio=%s release=%s (%s)", release->radio_version.c_str(),
+           release->firmware_version.c_str(), release->release_type.c_str());
   if (!downloader_.start(http_request_, *release)) {
     flash_diagnostics_.failed("download could not start");
     this->publish_firmware_update_status_();

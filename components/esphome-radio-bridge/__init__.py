@@ -13,6 +13,7 @@ from esphome.components import (
     esp32,
     http_request,
     sensor,
+    select,
     switch,
     text,
     text_sensor,
@@ -33,6 +34,7 @@ AUTO_LOAD = [
     "http_request",
     "json",
     "sensor",
+    "select",
     "switch",
     "text",
     "text_sensor",
@@ -65,6 +67,8 @@ CONF_CATALOGUE_STATUS = "catalogue_status"
 CONF_REFRESH_CATALOGUE = "refresh_catalogue"
 CONF_CHECK_UPDATES = "check_updates"
 CONF_LATEST_FIRMWARE = "latest_firmware"
+CONF_FIRMWARE_VERSION_SELECT = "firmware_version_select"
+CONF_FIRMWARE_VERSION_STATUS = "firmware_version_status"
 CONF_UPDATE_AVAILABLE = "update_available"
 CONF_FLASH_FIRMWARE = "flash_firmware"
 CONF_FIRMWARE_UPDATE_STATUS = "firmware_update_status"
@@ -93,6 +97,7 @@ ProbeRadioButton = ns.class_("ProbeRadioButton", button.Button)
 RefreshCatalogueButton = ns.class_("RefreshCatalogueButton", button.Button)
 CheckUpdatesButton = ns.class_("CheckUpdatesButton", button.Button)
 FlashFirmwareButton = ns.class_("FlashFirmwareButton", button.Button)
+FirmwareVersionSelect = ns.class_("FirmwareVersionSelect", select.Select)
 ManifestOverrideText = ns.class_("ManifestOverrideText", text.Text)
 EnterBootloaderButton = ns.class_("EnterBootloaderButton", button.Button)
 ExitBootloaderButton = ns.class_("ExitBootloaderButton", button.Button)
@@ -118,6 +123,12 @@ CONFIG_SCHEMA = cv.All(
                 CheckUpdatesButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
             ),
             cv.Optional(CONF_LATEST_FIRMWARE): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_FIRMWARE_VERSION_SELECT): select.select_schema(
+                FirmwareVersionSelect, entity_category=ENTITY_CATEGORY_CONFIG
+            ),
+            cv.Optional(CONF_FIRMWARE_VERSION_STATUS): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_FLASH_FIRMWARE): button.button_schema(
@@ -258,6 +269,13 @@ async def to_code(config):
     if conf := config.get(CONF_LATEST_FIRMWARE):
         entity = await text_sensor.new_text_sensor(conf)
         cg.add(var.set_latest_firmware_sensor(entity))
+    if conf := config.get(CONF_FIRMWARE_VERSION_SELECT):
+        entity = cg.new_Pvariable(conf[CONF_ID], var)
+        await select.register_select(entity, conf, options=["Latest"])
+        cg.add(var.set_firmware_version_select(entity))
+    if conf := config.get(CONF_FIRMWARE_VERSION_STATUS):
+        entity = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_firmware_version_status_sensor(entity))
     if conf := config.get(CONF_FLASH_FIRMWARE):
         await button.new_button(conf, var)
     if conf := config.get(CONF_FIRMWARE_UPDATE_STATUS):
