@@ -42,6 +42,9 @@ void RadioBridge::setup() {
     return;
   }
   mode_ = Mode::NORMAL;
+  normal_uart_experiment_ = board.normal_uart_mode == uart_modes::UartModeId::FOUR_WIRE
+                                ? uart_modes::NormalUartExperiment::FOUR_WIRE_PROFILE
+                                : uart_modes::NormalUartExperiment::TWO_WIRE;
   // Boot into application mode after ESP32 reboot or interrupted maintenance.
   if (!driver_->exit_bootloader()) {
     this->report_error_("Radio application reset failed");
@@ -52,6 +55,9 @@ void RadioBridge::setup() {
   if (transport_errors_sensor_ != nullptr) transport_errors_sensor_->publish_state(0);
   if (last_disconnect_reason_sensor_ != nullptr) last_disconnect_reason_sensor_->publish_state("None");
   this->publish_mode_();
+  this->publish_uart_mode_select_();
+  this->publish_uart_mode_status_("Ready: " +
+                                  std::string(uart_modes::experiment_option(normal_uart_experiment_)));
   this->begin_radio_identification_();
   this->update_bridge_health_(network::is_connected());
 }
@@ -76,6 +82,8 @@ void RadioBridge::dump_config() {
                 board.uart.rx, board.uart.rts, board.uart.cts);
   ESP_LOGCONFIG(TAG, "  Normal UART: %s", uart_modes::mode_name(board.normal_uart_mode));
   ESP_LOGCONFIG(TAG, "  Bootloader UART: %s", uart_modes::mode_name(board.bootloader_uart_mode));
+  ESP_LOGCONFIG(TAG, "  Runtime UART experiment: %s", uart_mode_select_ == nullptr ? "disabled" : "enabled");
+  ESP_LOGCONFIG(TAG, "  Flow-control wiring verified: %s", flow_control_wiring_verified_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Reset GPIO: %d", board.reset_gpio);
   ESP_LOGCONFIG(TAG, "  Boot GPIO: %d", board.boot_gpio);
   ESP_LOGCONFIG(TAG, "  Radio identification: %s",
@@ -168,9 +176,11 @@ bool RadioBridge::configure_uart_(Mode new_mode) {
   if (!uart_.ready() || driver_ == nullptr) return false;
   const auto& board = driver_->profile();
   const uint32_t baud = new_mode == Mode::NORMAL ? board.normal_baud : board.bootloader_baud;
-  const auto wire_mode = new_mode == Mode::NORMAL ? board.normal_uart_mode : board.bootloader_uart_mode;
+  const auto wire_mode = new_mode == Mode::NORMAL ? uart_modes::experiment_wire_mode(normal_uart_experiment_)
+                                                  : board.bootloader_uart_mode;
+  const auto pins = new_mode == Mode::NORMAL ? this->normal_pinout_() : board.uart;
   // Always apply the mode; normal and bootloader speeds may be identical.
-  if (!uart_.configure(baud, wire_mode)) {
+  if (!uart_.configure(baud, wire_mode, pins)) {
     ESP_LOGE(TAG, "Unable to configure UART for requested mode");
     return false;
   }
@@ -233,12 +243,95 @@ void RadioBridge::exit_bootloader() {
   ESP_LOGI(TAG, "Radio application reset and normal UART mode restored");
 }
 
+uart_modes::UartPinout RadioBridge::normal_pinout_() const {
+  return uart_modes::experiment_pinout(driver_->profile().uart, normal_uart_experiment_);
+}
+
+void RadioBridge::publish_uart_mode_select_() {
+  if (uart_mode_select_ != nullptr)
+    uart_mode_select_->publish_state(uart_modes::experiment_option(normal_uart_experiment_));
+}
+
+void RadioBridge::publish_uart_mode_status_(const std::string& status) {
+  if (uart_mode_status_sensor_ != nullptr) uart_mode_status_sensor_->publish_state(status);
+  ESP_LOGI(TAG, "UART experiment: %s", status.c_str());
+}
+
+bool RadioBridge::select_uart_mode(const std::string& option) {
+  using uart_modes::NormalUartExperiment;
+  NormalUartExperiment requested{};
+  if (option == uart_modes::experiment_option(NormalUartExperiment::TWO_WIRE))
+    requested = NormalUartExperiment::TWO_WIRE;
+  else if (option == uart_modes::experiment_option(NormalUartExperiment::FOUR_WIRE_PROFILE))
+    requested = NormalUartExperiment::FOUR_WIRE_PROFILE;
+  else if (option == uart_modes::experiment_option(NormalUartExperiment::FOUR_WIRE_SWAPPED))
+    requested = NormalUartExperiment::FOUR_WIRE_SWAPPED;
+  else {
+    this->publish_uart_mode_status_("Rejected: invalid UART mode");
+    this->publish_uart_mode_select_();
+    return false;
+  }
+  if (requested == normal_uart_experiment_) {
+    this->publish_uart_mode_select_();
+    return true;
+  }
+  if (!uart_modes::can_switch_normal_uart(mode_ == Mode::NORMAL, client_fd_ >= 0, identifying_,
+                                          flash_phase_ != FirmwareFlashPhase::IDLE, armed_, error_) ||
+      !uart_.ready()) {
+    this->publish_uart_mode_status_("Blocked: disconnect ZHA and finish maintenance/probing first");
+    this->publish_uart_mode_select_();
+    return false;
+  }
+  if (requested != NormalUartExperiment::TWO_WIRE && !flow_control_wiring_verified_) {
+    this->publish_uart_mode_status_("Blocked: verify RTS/CTS wiring before enabling 4-wire");
+    this->publish_uart_mode_select_();
+    return false;
+  }
+  const auto& board = driver_->profile();
+  if (!uart_modes::experiment_supported(board.uart, board.bootloader_uart_mode, requested)) {
+    this->publish_uart_mode_status_("Rejected: board does not support requested UART pins");
+    this->publish_uart_mode_select_();
+    return false;
+  }
+
+  // The UART is exclusively owned here; close the idle listener and reset the
+  // NCP session after changing its flow-control wiring.
+  this->close_listener_();
+  const auto previous = normal_uart_experiment_;
+  normal_uart_experiment_ = requested;
+  if (!this->configure_uart_(Mode::NORMAL) || !driver_->exit_bootloader()) {
+    normal_uart_experiment_ = previous;
+    if (!this->configure_uart_(Mode::NORMAL) || !driver_->exit_bootloader()) {
+      this->report_error_("UART experiment recovery failed");
+    } else {
+      this->publish_uart_mode_status_("Failed to apply mode; previous mode restored");
+      this->begin_radio_identification_();
+    }
+    this->publish_uart_mode_select_();
+    return false;
+  }
+  this->publish_uart_mode_select_();
+  const auto pinout = this->normal_pinout_();
+  this->publish_uart_mode_status_(std::string("Applied ") + uart_modes::experiment_option(requested) +
+                                  " (ESP RTS GPIO" + std::to_string(pinout.rts) + " / CTS GPIO" +
+                                  std::to_string(pinout.cts) + ")");
+  this->begin_radio_identification_();
+  this->update_bridge_health_(network::is_connected());
+  return true;
+}
+
 void RadioBridge::publish_mode_() {
   if (mode_sensor_ == nullptr || driver_ == nullptr) return;
   const auto& board = driver_->profile();
-  const auto wire_mode = mode_ == Mode::NORMAL ? board.normal_uart_mode : board.bootloader_uart_mode;
-  mode_sensor_->publish_state(std::string(mode_ == Mode::NORMAL ? "Normal (" : "Bootloader (") +
-                              uart_modes::mode_name(wire_mode) + ")");
+  const auto wire_mode = mode_ == Mode::NORMAL ? uart_modes::experiment_wire_mode(normal_uart_experiment_)
+                                               : board.bootloader_uart_mode;
+  const auto pins = mode_ == Mode::NORMAL ? this->normal_pinout_() : board.uart;
+  mode_sensor_->publish_state(
+      std::string(mode_ == Mode::NORMAL ? "Normal (" : "Bootloader (") + uart_modes::mode_name(wire_mode) +
+      (uart_modes::requires_rts_cts(wire_mode)
+           ? ", RTS GPIO" + std::to_string(pins.rts) + " CTS GPIO" + std::to_string(pins.cts)
+           : "") +
+      ")");
 }
 
 void RadioBridge::mark_maintenance_activity_() {

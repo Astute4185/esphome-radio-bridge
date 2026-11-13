@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "driver/gpio.h"
 #include "driver/uart.h"
 #include "esp_err.h"
 #include "mode_factory.h"
@@ -31,9 +32,11 @@ class EspIdfUartBus final : public identification::ProbeUart, private UartHardwa
     }
     return true;
   }
-  bool configure(uint32_t baud, UartModeId mode) {
-    if (!ready_ || baud == 0 || !valid_uart_mode(mode) || uart_set_baudrate(port_, baud) != ESP_OK ||
-        !mode_strategy(mode).apply(*this, pins_))
+  bool configure(uint32_t baud, UartModeId mode) { return configure(baud, mode, pins_); }
+  bool configure(uint32_t baud, UartModeId mode, const UartPinout& pins) {
+    if (!ready_ || baud == 0 || !valid_uart_mode(mode) ||
+        !valid_uart_pinout(pins, mode, UartModeId::TWO_WIRE) || uart_set_baudrate(port_, baud) != ESP_OK ||
+        !mode_strategy(mode).apply(*this, pins))
       return false;
     flush_input();
     return true;
@@ -57,6 +60,14 @@ class EspIdfUartBus final : public identification::ProbeUart, private UartHardwa
 
  private:
   bool set_pins(int tx, int rx, int rts, int cts) override {
+    // -1 means UART_PIN_NO_CHANGE in ESP-IDF, *not* GPIO disconnection.
+    // Release both candidate pads first when changing flow-control routing;
+    // in 2-wire mode they must remain high impedance rather than driven.
+    if (pins_.rts >= 0 && pins_.cts >= 0) {
+      if (gpio_reset_pin(static_cast<gpio_num_t>(pins_.rts)) != ESP_OK ||
+          gpio_reset_pin(static_cast<gpio_num_t>(pins_.cts)) != ESP_OK)
+        return false;
+    }
     return uart_set_pin(port_, tx, rx, rts, cts) == ESP_OK;
   }
   bool set_flow_control(bool enabled, uint8_t threshold) override {

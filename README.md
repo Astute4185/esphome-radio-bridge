@@ -259,3 +259,5 @@ reset after probing so ZHA always starts with a clean radio session.
 
 This feature requires hardware verification against the target MGM210
 firmware, especially with four-wire RTS/CTS.
+
+Experimental four-wire validation: [runtime UART mode spike](docs/uart-mode-spike.md).

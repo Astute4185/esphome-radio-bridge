@@ -12,6 +12,7 @@ from esphome.components import (
     button,
     esp32,
     http_request,
+    select,
     sensor,
     switch,
     text,
@@ -32,6 +33,7 @@ AUTO_LOAD = [
     "button",
     "http_request",
     "json",
+    "select",
     "sensor",
     "switch",
     "text",
@@ -51,6 +53,14 @@ CONF_LAST_DISCONNECT_REASON = "last_disconnect_reason"
 CONF_TRANSPORT_ERRORS = "transport_errors"
 CONF_DISCONNECTS = "disconnects"
 CONF_MODE = "mode"
+CONF_UART_MODE_SELECT = "uart_mode_select"
+CONF_UART_MODE_STATUS = "uart_mode_status"
+CONF_FLOW_PINS_VERIFIED = "flow_control_wiring_verified"
+UART_EXPERIMENT_OPTIONS = [
+    "2-wire (TX/RX)",
+    "4-wire (profile RTS/CTS)",
+    "4-wire (swapped RTS/CTS)",
+]
 CONF_FLASH_ARMED = "flash_armed"
 CONF_RADIO_RESET = "radio_reset"
 CONF_ENTER_BOOTLOADER = "enter_bootloader"
@@ -97,6 +107,7 @@ ManifestOverrideText = ns.class_("ManifestOverrideText", text.Text)
 EnterBootloaderButton = ns.class_("EnterBootloaderButton", button.Button)
 ExitBootloaderButton = ns.class_("ExitBootloaderButton", button.Button)
 FlashArmedSwitch = ns.class_("FlashArmedSwitch", switch.Switch)
+UartModeSelect = ns.class_("UartModeSelect", select.Select)
 
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
@@ -105,6 +116,13 @@ CONFIG_SCHEMA = cv.All(
             cv.Required(CONF_DRIVER): cv.one_of(*BOARD_DRIVERS, lower=True),
             cv.GenerateID(CONF_HTTP_REQUEST_ID): cv.use_id(http_request.HttpRequestComponent),
             cv.Optional(CONF_CATALOGUE_URL): secure_url,
+            cv.Optional(CONF_FLOW_PINS_VERIFIED, default=False): cv.boolean,
+            cv.Optional(CONF_UART_MODE_SELECT): select.select_schema(
+                UartModeSelect, entity_category=ENTITY_CATEGORY_CONFIG
+            ),
+            cv.Optional(CONF_UART_MODE_STATUS): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
             cv.Optional(CONF_MANIFEST_OVERRIDE): text.text_schema(
                 ManifestOverrideText, mode="text", entity_category=ENTITY_CATEGORY_CONFIG
             ),
@@ -241,9 +259,17 @@ async def to_code(config):
     cg.add(var.set_http_request(request))
     if catalogue_url := config.get(CONF_CATALOGUE_URL):
         cg.add(var.set_catalogue_url(catalogue_url))
+    cg.add(var.set_flow_control_wiring_verified(config[CONF_FLOW_PINS_VERIFIED]))
     cg.add(var.set_tcp_port(config[CONF_TCP_PORT]))
     cg.add(var.set_maintenance_timeout(config[CONF_MAINTENANCE_TIMEOUT].total_milliseconds))
 
+    if conf := config.get(CONF_UART_MODE_SELECT):
+        entity = cg.new_Pvariable(conf[CONF_ID], var)
+        await select.register_select(entity, conf, options=UART_EXPERIMENT_OPTIONS)
+        cg.add(var.set_uart_mode_select(entity))
+    if conf := config.get(CONF_UART_MODE_STATUS):
+        entity = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_uart_mode_status_sensor(entity))
     if conf := config.get(CONF_MANIFEST_OVERRIDE):
         override = cg.new_Pvariable(conf[CONF_ID], var)
         await text.register_text(override, conf, min_length=0, max_length=255)

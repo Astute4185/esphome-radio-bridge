@@ -11,6 +11,7 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/button/button.h"
 #include "esphome/components/http_request/http_request.h"
+#include "esphome/components/select/select.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/text/text.h"
@@ -23,10 +24,12 @@
 #include "firmware_flash_policy.h"
 #include "firmware_update_monitor.h"
 #include "mode_policy.h"
+#include "uart_experiment.h"
 
 namespace esphome::esphome_radio_bridge {
 
 class ManifestOverrideText;
+class UartModeSelect;
 
 class RadioBridge : public Component {
  public:
@@ -59,6 +62,10 @@ class RadioBridge : public Component {
   void set_transport_errors_sensor(sensor::Sensor* value) { transport_errors_sensor_ = value; }
   void set_disconnects_sensor(sensor::Sensor* value) { disconnects_sensor_ = value; }
   void set_mode_sensor(text_sensor::TextSensor* value) { mode_sensor_ = value; }
+  void set_uart_mode_select(UartModeSelect* value) { uart_mode_select_ = value; }
+  void set_uart_mode_status_sensor(text_sensor::TextSensor* value) { uart_mode_status_sensor_ = value; }
+  void set_flow_control_wiring_verified(bool value) { flow_control_wiring_verified_ = value; }
+  bool select_uart_mode(const std::string& option);
   void set_installed_firmware_sensor(text_sensor::TextSensor* value) { installed_firmware_sensor_ = value; }
   void set_radio_identification_status_sensor(text_sensor::TextSensor* value) {
     radio_identification_status_sensor_ = value;
@@ -83,6 +90,9 @@ class RadioBridge : public Component {
   void bridge_tcp_();
   void send_tcp_();
   void publish_mode_();
+  void publish_uart_mode_select_();
+  void publish_uart_mode_status_(const std::string& status);
+  uart_modes::UartPinout normal_pinout_() const;
   void mark_maintenance_activity_();
   void report_error_(const char* message);
   void publish_bridge_health_(BridgeHealth health);
@@ -139,6 +149,8 @@ class RadioBridge : public Component {
   BridgeHealth published_health_{BridgeHealth::STARTING};
   const char* last_failure_{nullptr};
   Mode mode_{Mode::NORMAL};
+  uart_modes::NormalUartExperiment normal_uart_experiment_{uart_modes::NormalUartExperiment::TWO_WIRE};
+  bool flow_control_wiring_verified_{false};
   bool armed_{false};
   bool identifying_{false};
   identification::RadioProbe* active_probe_{nullptr};
@@ -155,9 +167,21 @@ class RadioBridge : public Component {
   sensor::Sensor* transport_errors_sensor_{nullptr};
   sensor::Sensor* disconnects_sensor_{nullptr};
   text_sensor::TextSensor* mode_sensor_{nullptr};
+  UartModeSelect* uart_mode_select_{nullptr};
+  text_sensor::TextSensor* uart_mode_status_sensor_{nullptr};
   text_sensor::TextSensor* installed_firmware_sensor_{nullptr};
   text_sensor::TextSensor* radio_identification_status_sensor_{nullptr};
   switch_::Switch* armed_switch_{nullptr};
+};
+
+// Deliberately not optimistic: rejected/unsafe mode changes revert the UI.
+class UartModeSelect : public select::Select {
+ public:
+  explicit UartModeSelect(RadioBridge* parent) : parent_(parent) {}
+
+ protected:
+  void control(const std::string& value) override { parent_->select_uart_mode(value); }
+  RadioBridge* parent_;
 };
 
 class FlashFirmwareButton : public button::Button {

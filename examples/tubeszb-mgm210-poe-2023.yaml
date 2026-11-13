@@ -95,6 +95,14 @@ esphome-radio-bridge:
     name: EFR32 Probe Firmware
   mode:
     name: EFR32 Operating Mode
+  # SPIKE ONLY: switch ESP32 normal-mode UART configuration from Home Assistant.
+  # Never try four-wire until the physical RTS/CTS directions have been verified.
+  # This stays false by default; enabling it requires an explicit opt-in.
+  flow_control_wiring_verified: false
+  uart_mode_select:
+    name: EFR32 UART Test Mode
+  uart_mode_status:
+    name: EFR32 UART Mode Change Status
   flash_armed:
     name: EFR32 Firmware Flash Armed
   radio_reset:
