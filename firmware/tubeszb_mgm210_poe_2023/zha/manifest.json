@@ -5,11 +5,25 @@
   "latest": "0.1",
   "versions": [
     {
-      "firmware_version": "0.1",
-      "radio_version": "9.1.2",
-      "release_type": "beta",
+      "firmware_version": "1.1",
+      "radio_version": "9.1.2.4P",
+      "release_type": "release",
       "sha256": "8075a083f5ad5c47310ee8052e3fd1bed8edef3c4a575eee96eaf80e8ebd1d1d",
-      "file": "https://github.com/Astute4185/esphome-radio-bridge/releases/download/9.1.1r1/tubeszb_mgm210_zha_2023_9.1.2.0.gbl"
+      "file": "https://github.com/Astute4185/esphome-radio-bridge/releases/download/9.1.2r1/tubeszb_mgm210_zha_2023_9.1.2.0.gbl"
+    },
+    {
+      "firmware_version": "1.0",
+      "radio_version": "9.1.2.2P",
+      "release_type": "release",
+      "sha256": "2698c8c227c3b2cddef03289396d09483767d0f3f35b8fe84861d1aaeab600a9",
+      "file": "https://github.com/Astute4185/esphome-radio-bridge/releases/download/9.1.2r1/tubeszb_mgm210_zigbee_2P_9.1.2.0.gbl"
+    },
+    {
+      "firmware_version": "0.1",
+      "radio_version": "7.4.3",
+      "release_type": "release",
+      "sha256": "e2f23a4a97bb3d2a3c4ec9460de3ae5b8352cd377a573fe818be1ffb9b2786af",
+      "file": "https://github.com/Astute4185/esphome-radio-bridge/releases/download/9.1.1r1/tubeszb-mgm21-2022_2P_7.4.3.gbl"
     }
 ]
 }
