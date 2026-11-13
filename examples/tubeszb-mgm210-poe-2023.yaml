@@ -80,6 +80,9 @@ esphome-radio-bridge:
     name: EFR32 Update Available
   id: zigbee_gateway
   driver: tubeszb_mgm210_poe_2023
+  # Optional: driver = 4-wire normal (TubesZB), 2_wire or 4_wire overrides.
+  # Bootloader UART remains driver-selected (2-wire for TubesZB).
+  uart_mode: driver
   tcp_port: 6638
   maintenance_timeout: 10min
   bridge_ready:

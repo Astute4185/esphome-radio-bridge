@@ -67,8 +67,27 @@ RTS/CTS for its normal NCP application**, with ESP32 GPIO2 RTS connected to
 EFR32 PD02 CTS and EFR32 PC01 RTS connected to ESP32 GPIO13 CTS. The installed
 EFR32 firmware must enable that same routing. The Gecko bootloader retains
 **two-wire TX/RX** for firmware recovery. Existing two-wire-only NCP images
-are incompatible with the normal-mode configuration. Preserve a physical
+require `uart_mode: 2_wire` for normal operation. Preserve a physical
 recovery route before deploying.
+
+## Optional UART normal-mode override
+
+The board driver supplies the normal UART default. The `uart_mode` YAML
+choice can override that default without changing the bootloader UART:
+
+```yaml
+esphome-radio-bridge:
+  driver: tubeszb_mgm210_poe_2023
+  uart_mode: driver  # default; alternatives: 2_wire, 4_wire
+  mode:
+    name: EFR32 Operating Mode
+```
+
+The Operating Mode text sensor displays `4-wire`, `2-wire`, or
+`2-wire bootloader` on the TubesZB board. Other board drivers can also
+report `4-wire bootloader` if their bootloader requires RTS/CTS. This
+change is compile-time configuration, not an HA runtime selector. No
+entity names are automatically created or modified.
 
 ## EFR32 firmware flashing prerequisites
 

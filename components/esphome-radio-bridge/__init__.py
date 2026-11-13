@@ -44,6 +44,7 @@ AUTO_LOAD = [
 BOARD_DRIVERS = ("tubeszb_mgm210_poe_2023",)
 
 CONF_DRIVER = "driver"
+CONF_UART_MODE = "uart_mode"
 CONF_TCP_PORT = "tcp_port"
 CONF_MAINTENANCE_TIMEOUT = "maintenance_timeout"
 CONF_CONNECTED = "connected"
@@ -91,6 +92,7 @@ def secure_url(value):
 
 ns = cg.esphome_ns.namespace("esphome_radio_bridge")
 RadioBridge = ns.class_("RadioBridge", cg.Component)
+NormalUartModeOverride = ns.namespace("uart_modes").enum("NormalUartModeOverride", is_class=True)
 BoardModel = ns.namespace("drivers").enum("BoardModel", is_class=True)
 RadioResetButton = ns.class_("RadioResetButton", button.Button)
 ProbeRadioButton = ns.class_("ProbeRadioButton", button.Button)
@@ -108,6 +110,9 @@ CONFIG_SCHEMA = cv.All(
         {
             cv.GenerateID(): cv.declare_id(RadioBridge),
             cv.Required(CONF_DRIVER): cv.one_of(*BOARD_DRIVERS, lower=True),
+            cv.Optional(CONF_UART_MODE, default="driver"): cv.one_of(
+                "driver", "2_wire", "4_wire", lower=True
+            ),
             cv.GenerateID(CONF_HTTP_REQUEST_ID): cv.use_id(http_request.HttpRequestComponent),
             cv.Optional(CONF_CATALOGUE_URL): secure_url,
             cv.Optional(CONF_MANIFEST_OVERRIDE): text.text_schema(
@@ -248,6 +253,10 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     cg.add(var.set_board_model(getattr(BoardModel, config[CONF_DRIVER].upper())))
+    mode_choice = {"driver": "DRIVER", "2_wire": "TWO_WIRE", "4_wire": "FOUR_WIRE"}[
+        config[CONF_UART_MODE]
+    ]
+    cg.add(var.set_normal_uart_mode_override(getattr(NormalUartModeOverride, mode_choice)))
     request = await cg.get_variable(config[CONF_HTTP_REQUEST_ID])
     cg.add(var.set_http_request(request))
     if catalogue_url := config.get(CONF_CATALOGUE_URL):

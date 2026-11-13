@@ -1,7 +1,8 @@
 # UART signalling strategies
 
 The board driver selects a reusable UART strategy for **normal** and
-**bootloader** stages independently. ESPHome YAML selects a board driver, not
+**bootloader** stages independently. ESPHome YAML may override the **normal**
+mode; the bootloader mode always remains driver-owned. ESPHome YAML selects a board driver, not
 low-level UART handshaking. UART mode is not tied to the ESP32 Ethernet baseboard.
 
 | Mode | Hardware signals | Implementation |
@@ -72,3 +73,35 @@ on the same UART, `UART_PIN_NO_CHANGE` keeps the existing GPIO matrix routes;
 this does not physically remove connected RTS/CTS wires. Verify compatibility
 with each radio bootloader. ESP-IDF UART signal behavior is documented in the
 [ESP-IDF UART reference](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/uart.html).
+
+## YAML override and Operating Mode reporting
+
+`uart_mode` is optional and is evaluated when the ESP32 firmware starts.
+It selects the **normal application UART** only; it never changes the
+physical GPIO mapping or the driver's Gecko bootloader mode.
+
+```yaml
+esphome-radio-bridge:
+  driver: tubeszb_mgm210_poe_2023
+  uart_mode: driver  # default; 2_wire and 4_wire are the overrides
+  mode:
+    name: EFR32 Operating Mode
+```
+
+| `uart_mode` YAML value | Normal UART | Gecko bootloader |
+| --- | --- | --- |
+| `driver` (default) | Driver default: 4-wire on this board | 2-wire |
+| `2_wire` | 2-wire | 2-wire |
+| `4_wire` | 4-wire | 2-wire |
+
+**Operating Mode** is a text sensor, not a mode selector. Its values are
+standardised across drivers: `2-wire`, `4-wire`, `2-wire bootloader`, and
+`4-wire bootloader` (if another driver uses a four-wire bootloader). The
+sensor always reports the effective ESP32 UART mode rather than the board's
+default. It does not prove that the EFR32 bootloader has acknowledged entry.
+
+`uart_mode` is a **compile-time YAML choice**, not a Home Assistant runtime
+control. Changing it requires ESP32 recompile/OTA, but does not change
+installed radio firmware. The NCP firmware must match the selected UART
+flow-control mode; incorrect RTS/CTS wiring is not fixed by a software override.
+For boards without RTS/CTS GPIOs, forcing `4_wire` fails during setup.

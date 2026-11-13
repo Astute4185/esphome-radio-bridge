@@ -27,6 +27,7 @@
 #include "firmware_release_selection.h"
 #include "firmware_update_monitor.h"
 #include "mode_policy.h"
+#include "normal_uart_mode.h"
 
 namespace esphome::esphome_radio_bridge {
 
@@ -42,6 +43,9 @@ class RadioBridge : public Component {
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
 
   void set_board_model(drivers::BoardModel model) { driver_ = drivers::create_board_driver(model); }
+  void set_normal_uart_mode_override(uart_modes::NormalUartModeOverride selection) {
+    normal_uart_override_ = selection;
+  }
   void set_tcp_port(uint16_t port) { tcp_port_ = port; }
   void set_http_request(http_request::HttpRequestComponent* request) { http_request_ = request; }
   void set_catalogue_url(const std::string& url) { catalogue_url_ = url; }
@@ -158,6 +162,8 @@ class RadioBridge : public Component {
   BridgeHealth published_health_{BridgeHealth::STARTING};
   const char* last_failure_{nullptr};
   Mode mode_{Mode::NORMAL};
+  uart_modes::NormalUartModeOverride normal_uart_override_{uart_modes::NormalUartModeOverride::DRIVER};
+  uart_modes::UartModeId normal_uart_mode_{uart_modes::UartModeId::TWO_WIRE};
   bool armed_{false};
   bool identifying_{false};
   identification::RadioProbe* active_probe_{nullptr};

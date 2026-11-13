@@ -41,11 +41,16 @@ void RadioBridge::setup() {
     return;
   }
   const auto& board = driver_->profile();
+  normal_uart_mode_ = uart_modes::effective_normal_uart_mode(board.normal_uart_mode, normal_uart_override_);
+  if (!uart_modes::valid_uart_pinout(board.uart, normal_uart_mode_, board.bootloader_uart_mode)) {
+    this->report_error_("UART override incompatible with board GPIO mapping");
+    return;
+  }
   if (!driver_->setup()) {
     this->report_error_("Board control GPIO setup failed");
     return;
   }
-  if (!uart_.start(board.uart, board.normal_baud, board.normal_uart_mode, board.bootloader_uart_mode)) {
+  if (!uart_.start(board.uart, board.normal_baud, normal_uart_mode_, board.bootloader_uart_mode)) {
     this->report_error_("UART driver setup or mode initialisation failed");
     return;
   }
@@ -83,7 +88,10 @@ void RadioBridge::dump_config() {
                 driver_->flash_protocol() != nullptr ? "Available" : "Unsupported");
   ESP_LOGCONFIG(TAG, "  UART: UART%d, TX=%d RX=%d RTS=%d CTS=%d", board.uart.port, board.uart.tx,
                 board.uart.rx, board.uart.rts, board.uart.cts);
-  ESP_LOGCONFIG(TAG, "  Normal UART: %s", uart_modes::mode_name(board.normal_uart_mode));
+  const auto normal_mode =
+      uart_modes::effective_normal_uart_mode(board.normal_uart_mode, normal_uart_override_);
+  ESP_LOGCONFIG(TAG, "  Normal UART: %s (source: %s)", uart_modes::mode_name(normal_mode),
+                uart_modes::override_name(normal_uart_override_));
   ESP_LOGCONFIG(TAG, "  Bootloader UART: %s", uart_modes::mode_name(board.bootloader_uart_mode));
   ESP_LOGCONFIG(TAG, "  Reset GPIO: %d", board.reset_gpio);
   ESP_LOGCONFIG(TAG, "  Boot GPIO: %d", board.boot_gpio);
@@ -177,7 +185,7 @@ bool RadioBridge::configure_uart_(Mode new_mode) {
   if (!uart_.ready() || driver_ == nullptr) return false;
   const auto& board = driver_->profile();
   const uint32_t baud = new_mode == Mode::NORMAL ? board.normal_baud : board.bootloader_baud;
-  const auto wire_mode = new_mode == Mode::NORMAL ? board.normal_uart_mode : board.bootloader_uart_mode;
+  const auto wire_mode = new_mode == Mode::NORMAL ? normal_uart_mode_ : board.bootloader_uart_mode;
   // Always apply the mode; normal and bootloader speeds may be identical.
   if (!uart_.configure(baud, wire_mode)) {
     ESP_LOGE(TAG, "Unable to configure UART for requested mode");
@@ -245,9 +253,8 @@ void RadioBridge::exit_bootloader() {
 void RadioBridge::publish_mode_() {
   if (mode_sensor_ == nullptr || driver_ == nullptr) return;
   const auto& board = driver_->profile();
-  const auto wire_mode = mode_ == Mode::NORMAL ? board.normal_uart_mode : board.bootloader_uart_mode;
-  mode_sensor_->publish_state(std::string(mode_ == Mode::NORMAL ? "Normal (" : "Bootloader (") +
-                              uart_modes::mode_name(wire_mode) + ")");
+  const auto wire_mode = mode_ == Mode::NORMAL ? normal_uart_mode_ : board.bootloader_uart_mode;
+  mode_sensor_->publish_state(uart_modes::operating_mode_name(wire_mode, mode_ == Mode::BOOTLOADER));
 }
 
 void RadioBridge::mark_maintenance_activity_() {
