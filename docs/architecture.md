@@ -12,7 +12,11 @@
    independently testable through an injected `UartHardware` interface.
 5. **ESP-IDF UART bus adapter** owns the peripheral lifecycle, pin routing,
    data transfer, and dispatches the strategy selected by the board driver.
-6. **Host flashing client** implements Gecko XMODEM-CRC for compatible radios.
+6. **Firmware downloader/storage** stages the complete HTTPS `.gbl` image in
+   the driver's ESP32 partition, verifies SHA-256, and remains independent of
+   radio UART bootloader protocols.
+7. **Flash protocol** implements Gecko XMODEM-CRC for compatible EFR32 radios;
+   host flashing tools remain available for recovery and engineering tests.
 
 ## State model
 
@@ -22,7 +26,8 @@
 | BOOTLOADER | Driver's boot mode | Boot/reset/baud | Flash client |
 | RECOVERY | Restore normal mode | Bootloader exit | Disconnect stale client |
 
-MGM210 2023 uses **four-wire → two-wire → four-wire**. Other verified drivers
+MGM210 2023 POC uses **two-wire → two-wire → two-wire**; the later RTS/CTS
+migration will use **four-wire → two-wire → four-wire**. Other verified drivers
 can use two-wire-only, four-wire-only, or mixed stage profiles.
 
 A failed bootloader transition attempts recovery. Mode restoration is always
@@ -45,18 +50,21 @@ arbitrary UART flow-control toggle.
 | UART buffering and wraparound | Native C++ tests |
 | XMODEM CRC, retry, failure and completion | Python unit tests with fake bootloader |
 | Manifest validation | Python unit tests |
-| ESPHome config and generated firmware | `tests/components/serial_radio_gateway/test.esp32-idf.yaml` and `scripts/validate.sh` in CI |
+| ESPHome config and generated firmware | `tests/components/esphome-radio-bridge/test.esp32-idf.yaml` and `scripts/validate.sh` in CI |
+| Firmware-staging build requirements | Host Python tests for driver partition registration and HTTP validation |
 | Live reset, flow control, flashing and ZHA reconnect | Hardware acceptance tests required |
 
 ## Known limitations
 
 - Only the MGM210 2023 driver is production-selectable; additional profiles
   are native test fixtures.
-- Firmware probing and on-device firmware download from the user's previous
-  `efr32_info` / `efr32_flasher` implementation are **not yet included**.
+- Radio identification and on-device firmware download are implemented;
+  end-to-end bootloader flashing still requires hardware acceptance testing.
+- The `radio_fw` staging partition is declared at build time when flashing is
+  enabled; existing ESP32 devices need a distinct partition-table installation.
 - The generic gateway requires ESP32 with ESP-IDF and a network interface.
   It is not a generic USB-to-UART serial integration or a Thread border router.
 - TCP port 6638 is a raw, unauthenticated serial endpoint: restrict network
   access. ESPHome API button controls must also be protected.
-- The MGM210 NCP firmware must support RTS/CTS; this restriction is not
-  imposed on future two-wire-only drivers.
+- The MGM210 POC uses the existing two-wire NCP firmware. Four-wire operation
+  will require a matching RTS/CTS-enabled NCP image when enabled later.

@@ -1,8 +1,11 @@
-# Optional scratch partition for on-device radio firmware staging.
-# Initial deployment requires USB/serial flashing of the ESP32 partition table.
+# Legacy/manual staging package. Normally NOT needed: the TubesZB driver now
+# adds this partition automatically when the flash_firmware entity is configured.
+# Retained for custom builds or explicit partition management. Do not include
+# both this package and an identical manual esp32.partitions entry.
+# A generated partition table still must be deployed separately from app OTA.
 esp32:
   partitions:
     - name: radio_fw
       type: data
       subtype: undefined
-      size: 0x80000  # 512 KiB; must fit the release GBL binary
+      size: 0x80000  # 512 KiB; .gbl file must fit in full

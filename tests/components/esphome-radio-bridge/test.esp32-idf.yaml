@@ -5,7 +5,6 @@ esphome:
 
 packages:
   hardware: !include ../../../packages/esp32-wrover-lan8720.yaml
-  flash_staging: !include ../../../packages/radio-flash-staging.yaml
 
 external_components:
   - source:
@@ -16,9 +15,14 @@ external_components:
 logger:
   baud_rate: 0
 
+# Needed for GitHub Release downloads; the driver supplies radio_fw automatically.
 http_request:
   verify_ssl: true
   follow_redirects: true
+  redirect_limit: 5
+  buffer_size_tx: 4096
+  buffer_size_rx: 1024
+  timeout: 15s
 
 esphome-radio-bridge:
   # catalogue_url is optional: the selected driver supplies its default.
