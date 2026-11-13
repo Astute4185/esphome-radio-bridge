@@ -85,4 +85,4 @@ def test_latest_firmware_entity_uses_radio_stack_version_not_release_id():
     assert '"Loaded: " + latest_radio_version(out)' in downloader
     # Preserve release IDs for update comparison and download/flash selection.
     assert "firmware::assess_update(catalogue_result_" in core
-    assert "firmware::select_latest_release(catalogue_result_)" in core
+    assert "firmware::select_firmware_release(catalogue_result_, selected_release_id_)" in core

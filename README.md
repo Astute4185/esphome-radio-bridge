@@ -265,3 +265,14 @@ reset after probing so ZHA always starts with a clean radio session.
 
 This feature requires hardware verification against the target MGM210
 firmware, especially with four-wire RTS/CTS.
+
+### Firmware release selection
+
+The optional `firmware_version_select:` entity provides a runtime **Latest** or
+explicit release choice for EFR32 flashing. The choices are rebuilt from the
+validated driver catalogue manifest or a custom manifest override. NVS caching
+restores the last known list before Home Assistant reconnects on reboot. Versions
+with the same radio stack number remain distinct through their release IDs.
+See [firmware flashing documentation](docs/firmware_flashing.md#selecting-a-firmware-release)
+for cache boundaries, safety rules and the manual HA integration reload
+required when the manifest options change during an active API connection.

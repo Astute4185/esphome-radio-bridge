@@ -36,6 +36,11 @@ esphome-radio-bridge:
     name: EFR32 Check for Updates
   latest_firmware:
     name: EFR32 Latest Firmware
+  # Release list is populated from the active manifest on each successful load.
+  firmware_version_select:
+    name: EFR32 Firmware Version
+  firmware_version_status:
+    name: EFR32 Firmware Version List Status
   flash_firmware:
     name: EFR32 Update Firmware
   firmware_update_status:

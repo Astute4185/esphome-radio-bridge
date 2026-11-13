@@ -157,3 +157,68 @@ The status sensor distinguishes three different timeouts:
 
 These are bootloader transport diagnostics, not confirmation of the selected
 EFR32 application firmware's normal-mode RTS/CTS pin mapping.
+
+## Selecting a firmware release
+
+Enable the optional `firmware_version_select:` entity under `esphome-radio-bridge:`
+when the firmware flashing button is present:
+
+```yaml
+esphome-radio-bridge:
+  driver: tubeszb_mgm210_poe_2023
+  manifest_override:
+    name: EFR32 Firmware Manifest Override URL
+  firmware_version_select:
+    name: EFR32 Firmware Version
+  firmware_version_status:
+    name: EFR32 Firmware Version List Status
+  flash_armed:
+    name: EFR32 Firmware Flash Armed
+  flash_firmware:
+    name: EFR32 Update Firmware
+```
+
+- **Latest** follows the active manifest's `latest` release ID. All release
+  choices show radio stack version, release ID and release type (for example,
+  `9.1.2 (release 0.2, beta)`). Release ID is the unique selection key, not
+  the stack version; two builds with the same stack version can differ in
+  RTS/CTS or other radio settings.
+- The dropdown is rebuilt from every successfully validated manifest, whether
+  it came from the driver's default catalogue, a custom YAML catalogue, or
+  the Home Assistant **Manifest Override URL**.
+- On a successful refresh, the last selected release is retained if its
+  release ID still exists; otherwise it falls back to **Latest**.
+- **NVS cache:** After a successful download, the ESP32 saves the options and
+  selected release ID in flash, avoiding repeat writes when nothing changed.
+  At the next boot, the options are restored during component setup, *before
+  native API entity discovery*. A network outage leaves the cached choices
+  visible. Up to 24 entries of at most 95 label bytes each can be cached;
+  larger lists still work live but cannot be fully restored after reboot.
+- The cache is keyed to the board, firmware channel, catalogue URL and custom
+  manifest override. Switching sources invalidates choices from the previous
+  source. The cache stores **display labels and release IDs only**, never
+  release URLs or checksums. **Flashing requires a fresh, validated manifest**;
+  offline/cached selections alone can never start a flash.
+- Selecting an entry does not flash the radio. Disconnect ZHA, arm the
+  flasher, then use **EFR32 Update Firmware** to install the chosen release.
+  Firmware availability monitoring continues to compare against the manifest's
+  `latest`, independent of the selected rollback version.
+
+### Home Assistant dropdown refresh behavior
+
+ESPHome 2026.10.2 sends a select's option list during native API entity
+enumeration. It does **not** send a dynamic option-list update to an already
+connected Home Assistant client. We investigated API client reconnection but
+could not verify a stable, supported external-component method for forcing
+re-enumeration. **This branch does not disconnect API clients or reboot.**
+
+The NVS cache fixes the *ordinary reboot* race after the first successful
+manifest download. A first-ever boot or a newly changed custom manifest can
+still add or remove options while Home Assistant is already connected. In that
+case, go to **Home Assistant → Settings → Devices & services → ESPHome** and
+**Reload** this device's integration entry to refresh the list. The optional
+**EFR32 Firmware Version List Status** sensor reports when a manual reload may
+be needed. This does not interrupt the independent Zigbee TCP bridge.
+
+The ESPHome web server's select options can also be refreshed by reloading its
+browser page. Do not treat a cached list as permission to flash while offline.

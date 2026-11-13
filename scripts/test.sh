@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/python
 BUILD_DIR="$(mktemp -d)"
 trap 'rm -rf "$BUILD_DIR"' EXIT
-for name in test_mode_and_ring test_uart_modes test_bridge_health test_radio_identification test_firmware_catalogue test_firmware_update_monitor test_firmware_flash_policy test_flash_protocol test_firmware_flash_diagnostics; do
+for name in test_mode_and_ring test_uart_modes test_bridge_health test_radio_identification test_firmware_catalogue test_firmware_release_selection test_firmware_release_cache test_firmware_update_monitor test_firmware_flash_policy test_flash_protocol test_firmware_flash_diagnostics; do
   "${CXX:-g++}" -std=c++17 -Wall -Wextra -Werror -pedantic \
     -Icomponents/esphome-radio-bridge \
     "tests/cpp/${name}.cpp" -o "$BUILD_DIR/$name"
