@@ -116,84 +116,118 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(CONF_HTTP_REQUEST_ID): cv.use_id(http_request.HttpRequestComponent),
             cv.Optional(CONF_CATALOGUE_URL): secure_url,
             cv.Optional(CONF_MANIFEST_OVERRIDE): text.text_schema(
-                ManifestOverrideText, mode="text", entity_category=ENTITY_CATEGORY_CONFIG
+                ManifestOverrideText,
+                mode="text",
+                entity_category=ENTITY_CATEGORY_CONFIG,
+                icon="mdi:link-variant",
             ),
             cv.Optional(CONF_CATALOGUE_STATUS): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:format-list-bulleted",
             ),
             cv.Optional(CONF_REFRESH_CATALOGUE): button.button_schema(
-                RefreshCatalogueButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+                RefreshCatalogueButton,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:refresh",
             ),
             cv.Optional(CONF_CHECK_UPDATES): button.button_schema(
-                CheckUpdatesButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+                CheckUpdatesButton,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:update",
             ),
             cv.Optional(CONF_LATEST_FIRMWARE): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:tag-outline",
             ),
             cv.Optional(CONF_FIRMWARE_VERSION_SELECT): select.select_schema(
-                FirmwareVersionSelect, entity_category=ENTITY_CATEGORY_CONFIG
+                FirmwareVersionSelect,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+                icon="mdi:format-list-numbered",
             ),
             cv.Optional(CONF_FIRMWARE_VERSION_STATUS): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:information-outline",
             ),
             cv.Optional(CONF_FLASH_FIRMWARE): button.button_schema(
-                FlashFirmwareButton, entity_category=ENTITY_CATEGORY_CONFIG
+                FlashFirmwareButton,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+                icon="mdi:chip",
             ),
             cv.Optional(CONF_FIRMWARE_UPDATE_STATUS): text_sensor.text_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:progress-clock",
             ),
             cv.Optional(CONF_UPDATE_AVAILABLE): binary_sensor.binary_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:package-up",
             ),
             cv.Optional(CONF_TCP_PORT, default=6638): cv.port,
             cv.Optional(CONF_MAINTENANCE_TIMEOUT, default="10min"): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_BRIDGE_READY): binary_sensor.binary_sensor_schema(
                 device_class=DEVICE_CLASS_CONNECTIVITY,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:lan-check",
             ),
             cv.Optional(CONF_BRIDGE_STATUS): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:lan",
             ),
             cv.Optional(CONF_LAST_DISCONNECT_REASON): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:lan-disconnect",
             ),
             cv.Optional(CONF_TRANSPORT_ERRORS): sensor.sensor_schema(
                 accuracy_decimals=0,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:alert-circle-outline",
             ),
             cv.Optional(CONF_CONNECTED): binary_sensor.binary_sensor_schema(
                 device_class=DEVICE_CLASS_CONNECTIVITY,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:lan-connect",
             ),
             cv.Optional(CONF_DISCONNECTS): sensor.sensor_schema(
                 accuracy_decimals=0,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:lan-disconnect",
             ),
             cv.Optional(CONF_MODE): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:serial-port",
             ),
             cv.Optional(CONF_INSTALLED_FIRMWARE): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:chip",
             ),
             cv.Optional(CONF_RADIO_IDENTIFICATION_STATUS): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:information-outline",
             ),
             cv.Optional(CONF_PROBE_RADIO): button.button_schema(
-                ProbeRadioButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+                ProbeRadioButton,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:radar",
             ),
             cv.Optional(CONF_FLASH_ARMED): switch.switch_schema(
                 FlashArmedSwitch,
                 default_restore_mode="ALWAYS_OFF",
                 entity_category=ENTITY_CATEGORY_CONFIG,
+                icon="mdi:shield-lock-open",
             ),
             cv.Optional(CONF_RADIO_RESET): button.button_schema(
-                RadioResetButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+                RadioResetButton,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon="mdi:restart",
             ),
             cv.Optional(CONF_ENTER_BOOTLOADER): button.button_schema(
-                EnterBootloaderButton, entity_category=ENTITY_CATEGORY_CONFIG
+                EnterBootloaderButton,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+                icon="mdi:download",
             ),
             cv.Optional(CONF_EXIT_BOOTLOADER): button.button_schema(
-                ExitBootloaderButton, entity_category=ENTITY_CATEGORY_CONFIG
+                ExitBootloaderButton,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+                icon="mdi:exit-to-app",
             ),
         }
     ).extend(cv.COMPONENT_SCHEMA),
