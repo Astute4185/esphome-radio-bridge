@@ -104,7 +104,7 @@ def test_shared_baseboard_package_is_radio_agnostic():
     assert "tubeszb_mgm210" not in repr(pkg)
 
 
-def test_driver_owns_uart_mode_selection():
+def test_driver_owns_uart_pinout_and_bootloader_selection():
     driver = (COMPONENT / "board_driver.h").read_text()
     core = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
     schema = (COMPONENT / "__init__.py").read_text()
@@ -112,7 +112,7 @@ def test_driver_owns_uart_mode_selection():
     assert "bootloader_uart_mode" in driver
     assert "board.normal_uart_mode" in core
     assert "board.bootloader_uart_mode" in core
-    assert '"uart_mode"' not in schema
+    assert 'CONF_UART_MODE = "uart_mode"' in schema
 
 
 def test_component_cpp_files_are_placed_at_root():

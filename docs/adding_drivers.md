@@ -18,7 +18,8 @@ metadata is unavailable. The bridge never embeds board- or vendor-specific URLs.
 - `UartModeId::TWO_WIRE`: only TX and RX; RTS/CTS pins are -1 if both stages
   use two-wire. No RTS/CTS handshaking.
 - `UartModeId::FOUR_WIRE`: TX, RX, RTS, CTS and a valid RX threshold required.
-- **The driver selects the UART strategy**, not YAML or the gateway core.
+- **The driver defines the UART defaults and physical pins.** YAML can override
+  the normal two-wire/four-wire strategy without modifying the bootloader mode.
 - Concrete drivers own reset/bootloader sequences but do not duplicate UART
   mode implementations.
 
@@ -59,10 +60,12 @@ esphome-radio-bridge:
   tcp_port: 6638
 ```
 
-There is intentionally **no `uart_mode`, `rts_pin`, `cts_pin`, or
-`hardware_flow_control` YAML option**. The driver owns signalling choices.
-A two-wire-only driver is supported. The MGM210 PoE 2023 production driver
-uses four-wire normal UART (RTS/CTS) and two-wire Gecko bootloader UART.
+`uart_mode` is optional: `driver` (default), `2_wire` or `4_wire`. It only
+overrides the **normal** UART mode. There are intentionally no `rts_pin`,
+`cts_pin` or `hardware_flow_control` YAML options; the driver owns physical
+pin assignments and its bootloader strategy. A two-wire-only driver is still
+supported. The MGM210 PoE 2023 driver defaults to four-wire normal UART and
+two-wire Gecko bootloader UART.
 
 ## Same ESP32 network board, different radio
 
