@@ -2,7 +2,7 @@
   "schema_version": 1,
   "board": "tubeszb_mgm210_poe_2023",
   "radio_type": "zha",
-  "latest": "0.1",
+  "latest": "1.1",
   "versions": [
     {
       "firmware_version": "1.1",
