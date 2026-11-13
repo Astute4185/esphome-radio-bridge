@@ -11,7 +11,7 @@ namespace esphome::esphome_radio_bridge::firmware {
 
 struct FirmwareChoice {
   std::string label;
-  std::string release_id;  // Empty ID means follow manifest `latest`.
+  std::string release_id;  // Empty ID means use highest `firmware_version`.
 };
 
 inline std::string firmware_choice_label(const FirmwareRelease& release) {

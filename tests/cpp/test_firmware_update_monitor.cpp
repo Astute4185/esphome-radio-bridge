@@ -48,6 +48,12 @@ int main() {
   assert(assess_update(data, "9.1.2.0 (build 410)", true).availability == UpdateAvailability::CURRENT);
   assert(assess_update(data, "9.2.0", true).availability == UpdateAvailability::CURRENT);
 
+  // Even with a stale latest pointer, update assessment uses highest release ID.
+  data.versions.push_back(release("1.1", "9.2.0"));
+  assert(assess_update(data, "9.1.2", true).availability == UpdateAvailability::AVAILABLE);
+  assert(assess_update(data, "9.2.0", true).availability == UpdateAvailability::CURRENT);
+  data.versions.pop_back();
+
   data.versions.push_back(release("0.9", "9.0.0"));
   assert(assess_update(data, "9.0.0", true).availability == UpdateAvailability::AVAILABLE);
   assert(assess_update(data, "9.1.2", true).availability == UpdateAvailability::CURRENT);

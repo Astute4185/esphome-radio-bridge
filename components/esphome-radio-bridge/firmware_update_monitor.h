@@ -89,14 +89,8 @@ inline int compare_radio_versions(const std::string& installed, const std::strin
 inline UpdateAssessment assess_update(const FirmwareLoadResult& metadata,
                                       const std::string& installed_radio_version, bool radio_responding) {
   if (!metadata.ok) return {UpdateAvailability::UNKNOWN, "Catalogue not loaded"};
-  if (metadata.latest.empty()) return {UpdateAvailability::CURRENT, "No published releases"};
-  const FirmwareRelease* latest = nullptr;
-  for (const auto& release : metadata.versions) {
-    if (release.firmware_version == metadata.latest) {
-      latest = &release;
-      break;
-    }
-  }
+  if (metadata.versions.empty()) return {UpdateAvailability::CURRENT, "No published releases"};
+  const FirmwareRelease* latest = highest_firmware_release(metadata);
   if (latest == nullptr) return {UpdateAvailability::UNKNOWN, "Latest release not found"};
   if (!radio_responding) return {UpdateAvailability::UNKNOWN, "Radio version unavailable"};
   const int stack_comparison = compare_radio_versions(installed_radio_version, latest->radio_version);
@@ -115,11 +109,10 @@ inline UpdateAssessment assess_update(const FirmwareLoadResult& metadata,
     matching = &release;
   }
   if (matching == nullptr) return {UpdateAvailability::UNKNOWN, "Installed release cannot be identified"};
-  if (matching->firmware_version == metadata.latest)
+  if (matching->firmware_version == latest->firmware_version)
     return {UpdateAvailability::CURRENT, "Radio version matches latest release"};
-  const int release_comparison = compare_radio_versions(matching->firmware_version, latest->firmware_version);
-  if (release_comparison == 2)
-    return {UpdateAvailability::UNKNOWN, "Firmware release versions cannot be compared"};
+  const int release_comparison =
+      compare_firmware_versions(matching->firmware_version, latest->firmware_version);
   return release_comparison < 0
              ? UpdateAssessment{UpdateAvailability::AVAILABLE, "Newer firmware release published"}
              : UpdateAssessment{UpdateAvailability::CURRENT, "Installed release is not older"};
