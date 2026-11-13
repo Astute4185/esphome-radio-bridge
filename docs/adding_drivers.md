@@ -61,8 +61,8 @@ esphome-radio-bridge:
 
 There is intentionally **no `uart_mode`, `rts_pin`, `cts_pin`, or
 `hardware_flow_control` YAML option**. The driver owns signalling choices.
-A two-wire-only driver is supported. The MGM210 POC currently uses two-wire
-normal and two-wire bootloader UART, pending the later four-wire migration.
+A two-wire-only driver is supported. The MGM210 PoE 2023 production driver
+uses four-wire normal UART (RTS/CTS) and two-wire Gecko bootloader UART.
 
 ## Same ESP32 network board, different radio
 

@@ -35,13 +35,14 @@ int main() {
   hw.calls.clear();
   assert(mode_strategy(mgm.normal_uart_mode).apply(hw, mgm.uart));
   assert(mode_strategy(mgm.bootloader_uart_mode).apply(hw, mgm.uart));
-  // POC: normal and bootloader both disable hardware flow control.
-  // Reapply the strategy even though the mode and baud rate are unchanged.
+  // Production profile: four-wire NCP -> two-wire Gecko bootloader -> four-wire NCP.
+  // Mode transitions must reapply pin routing and handshaking, even at the same baud.
   static_assert(mgm.normal_baud == mgm.bootloader_baud);
   assert(mode_strategy(mgm.normal_uart_mode).apply(hw, mgm.uart));
-  assert((hw.calls == std::vector<std::string>{"flow:off:0", "pins:4,36,-1,-1", "flow:off:0",
-                                               "pins:4,36,-1,-1", "flow:off:0", "pins:4,36,-1,-1"}));
-  // The four-wire strategy remains available for the later firmware migration.
+  assert((hw.calls == std::vector<std::string>{"flow:off:0", "pins:4,36,2,13", "flow:on:122", "flow:off:0",
+                                               "pins:4,36,-1,-1", "flow:off:0", "pins:4,36,2,13",
+                                               "flow:on:122"}));
+  // Verify direct four-wire mode application and failure paths separately.
   hw.calls.clear();
   assert(mode_strategy(UartModeId::FOUR_WIRE).apply(hw, mgm.uart));
   assert((hw.calls == std::vector<std::string>{"flow:off:0", "pins:4,36,2,13", "flow:on:122"}));

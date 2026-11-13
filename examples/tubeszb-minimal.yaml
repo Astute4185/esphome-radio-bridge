@@ -1,4 +1,5 @@
-# Test example. MGM210 POC selects 2-wire normal and 2-wire bootloader UART.
+# Minimal bridge/monitoring example: MGM210 uses 4-wire normal and 2-wire bootloader UART.
+# The radio NCP image must enable CTS=PD02 and RTS=PC01.
 esphome:
   name: tubeszb-mgm210-poe-2023
   min_version: 2026.10.1
