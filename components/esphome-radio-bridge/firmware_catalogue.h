@@ -118,16 +118,6 @@ struct FirmwareLoadResult {
   std::vector<FirmwareRelease> versions;
 };
 
-// The manifest's `latest` is a release identifier, not the radio stack version.
-// Display the matching release's `radio_version` in Home Assistant while
-// retaining the release identifier for update assessment and flashing.
-inline std::string latest_radio_version(const FirmwareLoadResult& metadata) {
-  if (metadata.latest.empty()) return "None";
-  for (const auto& release : metadata.versions)
-    if (release.firmware_version == metadata.latest) return release.radio_version;
-  return "Unknown";
-}
-
 // Data validation is independent of JSON and HTTP and can be unit-tested natively.
 inline const char* release_validation_error(const FirmwareRelease& release) {
   if (!valid_firmware_version(release.firmware_version)) return "Invalid firmware_version";
@@ -165,6 +155,52 @@ inline const char* manifest_validation_error(const FirmwareLoadResult& metadata)
 
 inline bool valid_manifest_metadata(const FirmwareLoadResult& metadata) {
   return manifest_validation_error(metadata) == nullptr;
+}
+
+// Compare numeric dotted release identifiers, not lexicographic strings.
+// Both arguments must satisfy valid_firmware_version(). Missing or trailing
+// zero segments compare as zero (e.g. 1.2 == 1.2.0).
+inline int compare_firmware_versions(const std::string& left, const std::string& right) {
+  size_t left_pos = 0;
+  size_t right_pos = 0;
+  while (left_pos < left.size() || right_pos < right.size()) {
+    const size_t left_dot = left.find('.', left_pos);
+    const size_t right_dot = right.find('.', right_pos);
+    const size_t left_end = left_dot == std::string::npos ? left.size() : left_dot;
+    const size_t right_end = right_dot == std::string::npos ? right.size() : right_dot;
+    size_t left_digit = left_pos;
+    size_t right_digit = right_pos;
+    while (left_digit < left_end && left[left_digit] == '0') ++left_digit;
+    while (right_digit < right_end && right[right_digit] == '0') ++right_digit;
+    const size_t left_digits = left_end - left_digit;
+    const size_t right_digits = right_end - right_digit;
+    if (left_digits != right_digits) return left_digits < right_digits ? -1 : 1;
+    const int comparison = left.compare(left_digit, left_digits, right, right_digit, right_digits);
+    if (comparison != 0) return comparison < 0 ? -1 : 1;
+    left_pos = left_end < left.size() ? left_end + 1 : left.size();
+    right_pos = right_end < right.size() ? right_end + 1 : right.size();
+  }
+  return 0;
+}
+
+// `latest` remains a required manifest compatibility field, but the default
+// selection always follows the highest numeric firmware_version. Catalogue
+// ordering, radio_version and an outdated `latest` pointer cannot change it.
+inline const FirmwareRelease* highest_firmware_release(const FirmwareLoadResult& metadata) {
+  if (!valid_manifest_metadata(metadata)) return nullptr;
+  const FirmwareRelease* highest = nullptr;
+  for (const auto& release : metadata.versions) {
+    if (highest == nullptr ||
+        compare_firmware_versions(highest->firmware_version, release.firmware_version) < 0)
+      highest = &release;
+  }
+  return highest;
+}
+
+inline std::string latest_radio_version(const FirmwareLoadResult& metadata) {
+  if (metadata.versions.empty()) return "None";
+  const FirmwareRelease* highest = highest_firmware_release(metadata);
+  return highest != nullptr ? highest->radio_version : "Unknown";
 }
 
 // Worker task never touches the UART or any ESPHome entity; the main loop owns published state.

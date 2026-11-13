@@ -31,7 +31,14 @@ Both catalogue and manifest use `schema_version: 1`. Manifests contain a `latest
 version pointer and a `versions` array. Each release specifies `firmware_version`,
 `radio_version`, `release_type` (`beta`, `candidate`, or `release`), a 64-character
 `sha256`, and an absolute HTTPS GitHub Release download URL in `file`. No firmware binary is downloaded by
-this branch. `latest` must match one of the version entries. Empty manifests use
+this branch. `latest` must match one of the version entries for backwards compatibility,
+but the gateway's **Latest** selection, latest-firmware sensor and automatic
+update assessment use the greatest numeric dotted `firmware_version` in
+`versions`, regardless of array order. For example, `1.10` is newer than
+`1.9`. Explicitly choosing an older release in Home Assistant remains
+supported (e.g. selecting a 2-wire variant); that selection is persisted.
+Keep `latest` aligned with the maximum version in published manifests for
+external clients that still follow the pointer. Empty manifests use
 `latest: null` and `versions: []`.
 
 For ESPHome 2026.10.2, firmware metadata requests run in a FreeRTOS worker

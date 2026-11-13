@@ -29,10 +29,8 @@ inline const char* flash_block_reason(const FlashPreflight& state) {
 inline bool can_flash(const FlashPreflight& state) { return flash_block_reason(state) == nullptr; }
 
 inline const FirmwareRelease* select_latest_release(const FirmwareLoadResult& metadata) {
-  if (!metadata.ok || !valid_manifest_metadata(metadata)) return nullptr;
-  for (const auto& release : metadata.versions)
-    if (release.firmware_version == metadata.latest) return &release;
-  return nullptr;
+  if (!metadata.ok) return nullptr;
+  return highest_firmware_release(metadata);
 }
 
 }  // namespace esphome::esphome_radio_bridge::firmware

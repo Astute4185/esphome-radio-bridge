@@ -79,8 +79,8 @@ def test_latest_firmware_entity_uses_radio_stack_version_not_release_id():
     core = (COMPONENT / "esphome_radio_bridge.cpp").read_text()
     downloader = (COMPONENT / "firmware_catalogue.cpp").read_text()
     assert "latest_radio_version(const FirmwareLoadResult& metadata)" in header
-    assert "release.firmware_version == metadata.latest" in header
-    assert "return release.radio_version;" in header
+    assert "highest_firmware_release(metadata)" in header
+    assert "highest->radio_version" in header
     assert "firmware::latest_radio_version(catalogue_result_)" in core
     assert '"Loaded: " + latest_radio_version(out)' in downloader
     # Preserve release IDs for update comparison and download/flash selection.

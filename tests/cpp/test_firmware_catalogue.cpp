@@ -69,6 +69,15 @@ int main() {
   assert(!resolve_manifest_url(nested, "firmware/%2e%2e/manifest.json", result));
   assert(!resolve_manifest_url(nested, "https://evil.example/manifest.json", result));
 
+  // Release ordering is numeric by segment, not string or manifest order.
+  assert(compare_firmware_versions("1.10", "1.9") > 0);
+  assert(compare_firmware_versions("1.2", "1.11") < 0);
+  assert(compare_firmware_versions("1.1", "1.1.0") == 0);
+  assert(compare_firmware_versions("1.01", "1.1") == 0);
+  assert(compare_firmware_versions("1.1.1", "1.1") > 0);
+  assert(compare_firmware_versions("100000000000000000000", "99999999999999999999") > 0);
+  assert(compare_firmware_versions("0.1", "1.1") < 0);
+
   assert(valid_firmware_version("0.1"));
   assert(valid_firmware_version("3.2.10"));
   assert(!valid_firmware_version(""));
@@ -121,11 +130,11 @@ int main() {
   published.latest = "0.2";
   assert(latest_radio_version(published) == "9.2.1");
   published.latest = "0.1";
-  assert(latest_radio_version(published) == "9.1.2");
+  assert(latest_radio_version(published) == "9.2.1");  // Old pointer cannot override newer ID.
   published.latest = "0.3";
   assert(latest_radio_version(published) == "Unknown");
   published.latest.clear();
-  assert(latest_radio_version(published) == "None");
+  assert(latest_radio_version(published) == "Unknown");  // Inconsistent manifest.
   published.latest = "0.1";
   published.versions.pop_back();
   published.versions.front().sha256 = "invalid";
