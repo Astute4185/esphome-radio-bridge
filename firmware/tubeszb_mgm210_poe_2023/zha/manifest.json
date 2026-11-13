@@ -8,7 +8,7 @@
       "firmware_version": "0.1",
       "radio_version": "9.1.2",
       "release_type": "beta",
-      "sha256": "7bdbf32af5b11f3ce08ee60828bf65d8ba3490794b903076dd0d6a125234e76d",
+      "sha256": "8075a083f5ad5c47310ee8052e3fd1bed8edef3c4a575eee96eaf80e8ebd1d1d",
       "file": "https://github.com/Astute4185/esphome-radio-bridge/releases/download/9.1.1r1/tubeszb_mgm210_zha_2023_9.1.2.0.gbl"
     }
 ]
